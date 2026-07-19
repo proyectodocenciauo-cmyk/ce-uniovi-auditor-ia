@@ -1,0 +1,89 @@
+.ceia-admin{
+    --ceia-brand:#03827c;
+    --ceia-brand-dark:#02635f;
+    --ceia-blue:#315f94;
+    --ceia-ink:#172033;
+    --ceia-muted:#5d6877;
+    --ceia-line:#dce3e8;
+    --ceia-soft:#f5f8fa;
+    --ceia-danger:#a12622;
+    --ceia-warning:#8a5a00;
+    max-width:1400px;
+    color:var(--ceia-ink);
+}
+.ceia-admin *{box-sizing:border-box}
+.ceia-admin a{color:var(--ceia-brand-dark)}
+.ceia-admin .ceia-lead{max-width:900px;color:var(--ceia-muted);font-size:15px;line-height:1.6}
+.ceia-admin .ceia-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;margin:20px 0}
+.ceia-admin .ceia-col-3{grid-column:span 3}
+.ceia-admin .ceia-col-4{grid-column:span 4}
+.ceia-admin .ceia-col-6{grid-column:span 6}
+.ceia-admin .ceia-col-8{grid-column:span 8}
+.ceia-admin .ceia-col-12{grid-column:span 12}
+.ceia-admin .ceia-card{padding:20px;border:1px solid var(--ceia-line);border-radius:12px;background:#fff;box-shadow:0 5px 16px rgba(15,23,42,.05)}
+.ceia-admin .ceia-card h2,.ceia-admin .ceia-card h3{margin-top:0}
+.ceia-admin .ceia-metric{font-size:2rem;font-weight:800;line-height:1;color:var(--ceia-brand-dark)}
+.ceia-admin .ceia-metric-label{margin-top:8px;color:var(--ceia-muted)}
+.ceia-admin .ceia-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.ceia-admin .button-primary{background:var(--ceia-brand);border-color:var(--ceia-brand)}
+.ceia-admin .button-primary:hover,.ceia-admin .button-primary:focus{background:var(--ceia-brand-dark);border-color:var(--ceia-brand-dark)}
+.ceia-admin .ceia-button-danger{color:#fff;background:var(--ceia-danger);border-color:var(--ceia-danger)}
+.ceia-admin .ceia-pill{display:inline-block;padding:4px 9px;border-radius:999px;background:#eef2f5;color:#344054;font-size:12px;font-weight:700;white-space:nowrap}
+.ceia-admin .ceia-pill--ok{background:#e5f5ef;color:#075f4f}
+.ceia-admin .ceia-pill--warn{background:#fff3d6;color:#765000}
+.ceia-admin .ceia-pill--bad{background:#fde8e7;color:#8f211d}
+.ceia-admin .ceia-pill--info{background:#e9f1fa;color:#2a567f}
+.ceia-admin .ceia-callout{padding:14px 16px;border-left:4px solid var(--ceia-blue);border-radius:8px;background:#eef5fb;line-height:1.55}
+.ceia-admin .ceia-callout--warning{border-left-color:#d99a18;background:#fff8e7}
+.ceia-admin .ceia-callout--danger{border-left-color:var(--ceia-danger);background:#fff1f0}
+.ceia-admin .ceia-checklist{margin:0;padding-left:20px;line-height:1.75}
+.ceia-admin .ceia-table-wrap{overflow:auto;border:1px solid var(--ceia-line);border-radius:10px;background:#fff}
+.ceia-admin table.ceia-table{width:100%;border-collapse:collapse}
+.ceia-admin .ceia-table th,.ceia-admin .ceia-table td{padding:12px 14px;border-bottom:1px solid #e9edf0;text-align:left;vertical-align:top}
+.ceia-admin .ceia-table th{background:#f7f9fa;color:#344054;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+.ceia-admin .ceia-table tr:last-child td{border-bottom:0}
+.ceia-admin .ceia-table .ceia-title{font-weight:700;color:var(--ceia-ink)}
+.ceia-admin .ceia-muted{color:var(--ceia-muted)}
+.ceia-admin .ceia-small{font-size:12px}
+.ceia-admin .ceia-form-grid{display:grid;grid-template-columns:minmax(180px,1fr) minmax(280px,3fr);gap:16px 22px;align-items:start}
+.ceia-admin .ceia-label{padding-top:8px;font-weight:700}
+.ceia-admin input[type="text"],.ceia-admin input[type="url"],.ceia-admin input[type="email"],.ceia-admin input[type="number"],.ceia-admin input[type="password"],.ceia-admin input[type="search"],.ceia-admin select,.ceia-admin textarea{width:100%;max-width:760px}
+.ceia-admin textarea{min-height:100px}
+.ceia-admin .ceia-inline-form{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ceia-admin .ceia-inline-form select,.ceia-admin .ceia-inline-form input{width:auto;max-width:170px}
+.ceia-admin .ceia-code{max-height:480px;overflow:auto;padding:14px;border-radius:8px;background:#101828;color:#e6edf3;white-space:pre-wrap;word-break:break-word}
+.ceia-admin .ceia-json{max-height:320px;overflow:auto;padding:12px;border:1px solid var(--ceia-line);border-radius:8px;background:#f8fafb;white-space:pre-wrap;word-break:break-word}
+.ceia-admin .ceia-preview{width:100%;min-height:650px;border:1px solid var(--ceia-line);border-radius:8px;background:#fff}
+.ceia-admin .ceia-proposal-meta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
+.ceia-admin .ceia-meta-item{padding:12px;border:1px solid var(--ceia-line);border-radius:8px;background:#fff}
+.ceia-admin .ceia-meta-item b{display:block;margin-bottom:5px;color:var(--ceia-muted);font-size:12px;text-transform:uppercase}
+.ceia-admin .ceia-review-box{position:sticky;top:46px}
+.ceia-admin .ceia-review-box textarea{width:100%;max-width:none}
+.ceia-admin .ceia-secret-state{font-weight:700;color:var(--ceia-brand-dark)}
+.ceia-admin .diff{width:100%}
+.ceia-admin .diff td{padding:3px 7px;word-break:break-word}
+.ceia-admin .diff-deletedline{background:#ffe9e8}
+.ceia-admin .diff-addedline{background:#e6f6ee}
+@media(max-width:1100px){
+    .ceia-admin .ceia-col-3{grid-column:span 6}
+    .ceia-admin .ceia-col-4,.ceia-admin .ceia-col-6,.ceia-admin .ceia-col-8{grid-column:span 12}
+    .ceia-admin .ceia-proposal-meta{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .ceia-admin .ceia-review-box{position:static}
+}
+@media(max-width:782px){
+    .ceia-admin{padding-right:10px}
+    .ceia-admin .ceia-grid{grid-template-columns:1fr}
+    .ceia-admin .ceia-col-3,.ceia-admin .ceia-col-4,.ceia-admin .ceia-col-6,.ceia-admin .ceia-col-8,.ceia-admin .ceia-col-12{grid-column:1}
+    .ceia-admin .ceia-form-grid{grid-template-columns:1fr}
+    .ceia-admin .ceia-label{padding-top:0}
+    .ceia-admin .ceia-proposal-meta{grid-template-columns:1fr}
+    .ceia-admin .ceia-table--responsive thead{display:none}
+    .ceia-admin .ceia-table--responsive,.ceia-admin .ceia-table--responsive tbody,.ceia-admin .ceia-table--responsive tr,.ceia-admin .ceia-table--responsive td{display:block;width:100%}
+    .ceia-admin .ceia-table--responsive tr{padding:10px;border-bottom:2px solid var(--ceia-line)}
+    .ceia-admin .ceia-table--responsive td{padding:7px 4px;border:0}
+    .ceia-admin .ceia-table--responsive td::before{content:attr(data-label);display:block;margin-bottom:3px;color:var(--ceia-muted);font-size:11px;font-weight:700;text-transform:uppercase}
+    .ceia-admin .ceia-inline-form{align-items:stretch}
+    .ceia-admin .ceia-inline-form select,.ceia-admin .ceia-inline-form input,.ceia-admin .ceia-inline-form .button{width:100%;max-width:none}
+    .ceia-admin .ceia-preview{min-height:500px}
+}
+
