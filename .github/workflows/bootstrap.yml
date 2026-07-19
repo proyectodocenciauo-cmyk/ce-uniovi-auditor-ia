@@ -1,0 +1,43 @@
+name: CE-IA · Preparar repositorio
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  expandir:
+    name: Expandir código fuente validado
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruir y verificar paquete
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat bootstrap/source.part.* | base64 --decode > /tmp/ceia-source.tar.gz
+          echo "2655de322a558ddeb8bd12d2a41356db62951d09bdfed1b4c329726c67bba4b5  /tmp/ceia-source.tar.gz" | sha256sum --check -
+          tar -tzf /tmp/ceia-source.tar.gz >/dev/null
+          tar -xzf /tmp/ceia-source.tar.gz
+          rm -rf bootstrap
+          rm -f .github/workflows/bootstrap.yml
+
+      - name: Publicar árbol fuente
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "CE-IA Bootstrap"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No hay cambios que publicar."
+            exit 0
+          fi
+          git commit -m "Expand CE-IA 0.10.1 source tree"
+          git push
