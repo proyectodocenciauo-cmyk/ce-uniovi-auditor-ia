@@ -17,9 +17,16 @@ class GeminiProvider:
         self.api_key = api_key
         self.model = model
 
+    def _safe_error_message(self, exc: Exception) -> str:
+        message = " ".join(str(exc).split())
+        if self.api_key:
+            message = message.replace(self.api_key, "[clave oculta]")
+        return (message or type(exc).__name__)[:500]
+
     def analyze(self, prompt: str) -> ModelProposal:
         try:
             from google import genai
+            from google.genai import types
         except ImportError as exc:
             raise ProviderError("No está instalado el paquete oficial google-genai") from exc
 
@@ -28,17 +35,22 @@ class GeminiProvider:
         try:
             for attempt in range(2):
                 try:
-                    interaction = client.interactions.create(
+                    response = client.models.generate_content(
                         model=self.model,
-                        input=prompt,
-                        store=False,
-                        response_format={
-                            "type": "text",
-                            "mime_type": "application/json",
-                            "schema": ModelProposal.model_json_schema(),
-                        },
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=ModelProposal,
+                        ),
                     )
-                    output = interaction.output_text
+
+                    parsed = getattr(response, "parsed", None)
+                    if isinstance(parsed, ModelProposal):
+                        return parsed
+                    if parsed is not None:
+                        return ModelProposal.model_validate(parsed)
+
+                    output = getattr(response, "text", None)
                     if not output:
                         raise ProviderError("Gemini devolvió una respuesta vacía")
                     return ModelProposal.model_validate_json(output)
@@ -47,11 +59,16 @@ class GeminiProvider:
                     if attempt == 0:
                         time.sleep(1)
                         continue
+                except ProviderError:
+                    raise
                 except Exception as exc:  # El SDK usa excepciones HTTP propias según la versión.
-                    message = str(exc)
-                    if any(marker in message.lower() for marker in ("429", "quota", "rate limit", "503", "temporar")):
+                    message = self._safe_error_message(exc)
+                    lowered = message.lower()
+                    if any(marker in lowered for marker in ("429", "quota", "rate limit", "503", "temporar")):
                         raise ProviderTemporaryError("Gemini gratuito está temporalmente limitado") from exc
-                    raise ProviderError("Gemini no pudo generar una propuesta estructurada") from exc
+                    if any(marker in lowered for marker in ("400", "bad request", "invalid argument")):
+                        raise ProviderError(f"Gemini rechazó la solicitud estructurada: {message}") from exc
+                    raise ProviderError(f"Gemini no pudo generar una propuesta estructurada: {message}") from exc
         finally:
             client.close()
 
