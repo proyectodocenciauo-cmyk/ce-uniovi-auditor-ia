@@ -1,16 +1,29 @@
-name: CE-IA · Comprobar conexión
+name: CE-IA · Conexión y piloto gratuito
 
 on:
   workflow_dispatch:
+    inputs:
+      modo:
+        description: Acción que se ejecutará
+        required: true
+        default: comprobar_conexion
+        type: choice
+        options:
+          - comprobar_conexion
+          - piloto_un_tramite
 
 permissions:
   contents: read
 
+concurrency:
+  group: ceia-piloto-manual
+  cancel-in-progress: false
+
 jobs:
-  comprobar:
-    name: Comprobar conexión privada con WordPress
+  ceia:
+    name: CE-IA · ${{ inputs.modo }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       CEIA_WP_URL: ${{ secrets.CEIA_WP_URL }}
       CEIA_WP_USER: ${{ secrets.CEIA_WP_USER }}
@@ -34,3 +47,7 @@ jobs:
 
       - name: Comprobar conexión privada con WordPress
         run: ceia-worker status
+
+      - name: Ejecutar piloto de un único trámite
+        if: ${{ inputs.modo == 'piloto_un_tramite' }}
+        run: ceia-worker run --max-jobs 1
