@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -21,7 +21,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat bootstrap/source.part.* | base64 --decode > /tmp/ceia-source.tar.gz
+
+          for part in 00 01 02 03 04 05; do
+            test -s "bootstrap/source.part.${part}" || {
+              echo "Falta bootstrap/source.part.${part} o está vacío."
+              exit 1
+            }
+          done
+
+          cat bootstrap/source.part.{00..05} | base64 --decode > /tmp/ceia-source.tar.gz
           echo "2655de322a558ddeb8bd12d2a41356db62951d09bdfed1b4c329726c67bba4b5  /tmp/ceia-source.tar.gz" | sha256sum --check -
           tar -tzf /tmp/ceia-source.tar.gz >/dev/null
           tar -xzf /tmp/ceia-source.tar.gz
