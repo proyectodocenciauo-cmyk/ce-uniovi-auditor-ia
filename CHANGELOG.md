@@ -1,3 +1,9 @@
+## 0.10.2
+- Sustituye la API experimental `interactions.create` por la API estable `models.generate_content` de Gemini.
+- Usa salida JSON estructurada mediante el modelo Pydantic `ModelProposal`.
+- Mejora los mensajes de error HTTP sin exponer la clave de Gemini.
+- Añade una prueba de regresión para impedir volver accidentalmente a la API experimental.
+
 ## 0.10.1
 - Edición de coste cero: elimina por completo el proveedor OpenAI del plugin y del trabajador.
 - Borra de la configuración cualquier clave OpenAI heredada al actualizar.
