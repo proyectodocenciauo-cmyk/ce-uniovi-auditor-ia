@@ -1,0 +1,36 @@
+name: CE-IA · Comprobar conexión
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  comprobar:
+    name: Comprobar conexión privada con WordPress
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CEIA_WP_URL: ${{ secrets.CEIA_WP_URL }}
+      CEIA_WP_USER: ${{ secrets.CEIA_WP_USER }}
+      CEIA_WP_APP_PASSWORD: ${{ secrets.CEIA_WP_APP_PASSWORD }}
+      CEIA_WORKER_ID: github-actions-manual
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v6
+
+      - name: Preparar Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: worker/pyproject.toml
+
+      - name: Instalar trabajador
+        run: python -m pip install ./worker
+
+      - name: Comprobar conexión privada con WordPress
+        run: ceia-worker status
