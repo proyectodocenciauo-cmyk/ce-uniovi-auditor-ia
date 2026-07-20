@@ -31,6 +31,11 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     run = subparsers.add_parser("run", help="Procesa la cola dentro del presupuesto configurado")
     run.add_argument("--max-jobs", type=int, default=None)
+    run.add_argument(
+        "--success-if-completed",
+        action="store_true",
+        help="Devuelve éxito si al menos un trabajo terminó, aunque se hayan descartado otros",
+    )
     subparsers.add_parser("status", help="Comprueba la conexión privada con WordPress")
     subparsers.add_parser(
         "gemini-check",
@@ -78,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         stats = Worker(client).run(max_jobs=args.max_jobs)
         print(json.dumps(stats, ensure_ascii=False))
+        if args.success_if_completed and stats["completed"] > 0:
+            return 0
         return 0 if stats["failed"] == 0 else 2
     except (ConfigurationError, WordPressAPIError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
