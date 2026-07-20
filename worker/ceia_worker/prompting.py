@@ -22,15 +22,16 @@ REGLAS EDITORIALES
 1. Escribe en español claro, preciso, completo y didáctico. La página debe entenderse sin haber leído ninguna otra.
 2. Conserva toda información útil del contenido actual; elimina o sustituye algo solo cuando una fuente suficiente demuestre que está obsoleto o es erróneo.
 3. Redacción atemporal: no digas «ahora está cerrado», «este curso» o equivalentes. Cuando proceda, presenta el último plazo oficial publicado como referencia y enlaza la convocatoria oficial.
-4. Mantén la estética profesional del Consejo: verde #03827C, azul #315F94, tarjetas claras, jerarquía legible y botones alineados.
+4. Mantén la estética profesional del Consejo: verde #03827C, azul #315F94, tarjetas claras, jerarquía legible y enlaces de acción alineados.
 5. Devuelve únicamente un bloque para pegar dentro de la página: una <section> raíz con id único, CSS completamente limitado a ese id, sin DOCTYPE, html, head ni body.
 6. No uses <span>. No uses JavaScript, formularios, iframes, manejadores on*, contenido remoto CSS, @import ni estilos globales.
-7. Diseño responsive real: medidas fluidas, grid/flex que no desborde, botones de ancho útil y al menos un @media para móvil. No fijes anchuras que rompan pantallas estrechas.
-8. Conserva la estructura visual anterior cuando sea aprovechable y mejórala sin cambiar de identidad.
-9. Prioriza enlaces internos exactos de la web del Consejo cuando ya existan y encajen perfectamente. No fabriques slugs.
-10. No incluyas la dirección postal del Consejo. Usa vice.estudiantes@uniovi.es como contacto general del Consejo; para «quién tramita/resuelve», usa el servicio oficial competente si la fuente lo acredita.
-11. Precios públicos, pagos, requisitos, límites y efectos jurídicos requieren precisión literal de fondo, pero no copies extensamente las fuentes.
-12. index_patch solo puede contener cambios demostrados para el índice dinámico. Omite cada campo que no deba cambiar.
+7. No uses <button>, <input>, <select> ni otros controles interactivos. Todo botón visual debe ser un enlace HTTPS <a> con una clase CSS dentro de la sección raíz.
+8. Diseño responsive real: medidas fluidas, grid/flex que no desborde, enlaces de acción de ancho útil y al menos un @media para móvil. No fijes anchuras que rompan pantallas estrechas.
+9. Conserva la estructura visual anterior cuando sea aprovechable y mejórala sin cambiar de identidad.
+10. Prioriza enlaces internos exactos de la web del Consejo cuando ya existan y encajen perfectamente. No fabriques slugs.
+11. No incluyas la dirección postal del Consejo. Usa vice.estudiantes@uniovi.es como contacto general del Consejo; para «quién tramita/resuelve», usa el servicio oficial competente si la fuente lo acredita.
+12. Precios públicos, pagos, requisitos, límites y efectos jurídicos requieren precisión literal de fondo, pero no copies extensamente las fuentes.
+13. index_patch solo puede contener cambios demostrados para el índice dinámico. Omite cada campo que no deba cambiar.
 """.strip()
 
 
@@ -85,4 +86,3 @@ def build_prompt(
         + "Devuelve exclusivamente el objeto JSON ajustado al esquema. "
         + "Si no hace falta cambiar nada, usa change_required=false, proposed_content vacío e index_patch vacío, pero explica la verificación en summary."
     )
-
