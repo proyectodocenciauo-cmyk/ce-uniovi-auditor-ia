@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import urllib.parse
 from typing import Any
 
 from . import __version__
@@ -13,6 +14,18 @@ from .wordpress import WordPressAPIError, WordPressClient
 
 
 LOGGER = logging.getLogger("ceia")
+MANAGED_HOST = "www.unioviedo.es"
+MANAGED_PATH_PREFIX = "/cestudiantes/"
+
+
+def _is_managed_item_url(url: str) -> bool:
+    parsed = urllib.parse.urlsplit(url.strip())
+    path = parsed.path or "/"
+    return (
+        parsed.scheme.lower() == "https"
+        and (parsed.hostname or "").lower().rstrip(".") == MANAGED_HOST
+        and (path.rstrip("/") == "/cestudiantes" or path.startswith(MANAGED_PATH_PREFIX))
+    )
 
 
 class Worker:
@@ -71,7 +84,14 @@ class Worker:
     def _process(self, context: dict[str, Any]) -> None:
         item = context.get("item") or {}
         job_id = str((context.get("job") or {}).get("id", ""))
+        item_url = str(item.get("url", ""))
         LOGGER.info("Investigando item=%s job=%s", item.get("id"), job_id)
+
+        if not _is_managed_item_url(item_url):
+            raise ProviderError(
+                "El trámite está fuera del alcance permitido. Solo se procesan páginas bajo "
+                "https://www.unioviedo.es/cestudiantes/."
+            )
 
         evidence, retrieval_notes = Retriever(self.config).collect(context)
         usable = [entry for entry in evidence if entry.http_status == 200 and entry.excerpt.strip()]
@@ -83,7 +103,21 @@ class Worker:
 
         prompt = build_prompt(context, evidence, self.config, retrieval_notes)
         proposal = self.provider.analyze(prompt)
-        report = validate_proposal(proposal, evidence, str(item.get("risk", "medium")))
+        try:
+            report = validate_proposal(proposal, evidence, str(item.get("risk", "medium")))
+        except UnsafeProposalError as exc:
+            LOGGER.warning("La primera propuesta HTML no era segura; se solicita una única reparación: %s", exc)
+            repair_prompt = (
+                prompt
+                + "\n\nCORRECCIÓN TÉCNICA OBLIGATORIA\n"
+                + "La respuesta anterior fue rechazada por esta razón: "
+                + str(exc)
+                + "\nDevuelve de nuevo el objeto JSON completo. Conserva exactamente los hechos, citas y contenido útil, "
+                + "pero reescribe proposed_content para cumplir las reglas. Usa enlaces <a> estilizados en lugar de "
+                + "<button>, formularios o controles interactivos. No añadas ningún hecho ni URL nueva."
+            )
+            proposal = self.provider.analyze(repair_prompt)
+            report = validate_proposal(proposal, evidence, str(item.get("risk", "medium")))
 
         facts_by_evidence: dict[str, list[dict[str, Any]]] = {}
         for fact in proposal.facts:
