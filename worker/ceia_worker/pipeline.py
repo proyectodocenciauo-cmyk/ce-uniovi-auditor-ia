@@ -39,20 +39,24 @@ class Worker:
             job_id = str((context.get("job") or {}).get("id", ""))
             if not job_id:
                 stats["failed"] += 1
+                LOGGER.error("WordPress devolvió un trabajo sin identificador")
                 continue
             try:
                 self._process(context)
                 stats["completed"] += 1
             except ProviderTemporaryError as exc:
                 stats["failed"] += 1
+                LOGGER.error("Fallo temporal en job=%s: %s", job_id, str(exc)[:1000])
                 self.wordpress.fail(job_id, "worker_temporary", str(exc))
             except (ProviderError, UnsafeProposalError) as exc:
                 stats["failed"] += 1
+                LOGGER.error("Fallo de análisis o validación en job=%s: %s", job_id, str(exc)[:1000])
                 self.wordpress.fail(job_id, "research_validation_failed", str(exc))
             except Exception as exc:
                 stats["failed"] += 1
                 # No se envían trazas ni contenidos; solo clase y mensaje acotado.
                 safe_message = f"{type(exc).__name__}: {str(exc)[:800]}"
+                LOGGER.error("Fallo inesperado en job=%s: %s", job_id, safe_message)
                 try:
                     self.wordpress.fail(job_id, "worker_temporary", safe_message)
                 except WordPressAPIError:
@@ -105,4 +109,3 @@ class Worker:
             )[:20_000]
 
         self.wordpress.submit_result(job_id, payload)
-
