@@ -25,13 +25,7 @@ VALID_PROPOSAL = {
 }
 
 
-class FakeGenerateContentConfig:
-    def __init__(self, **kwargs):
-        self.kwargs = kwargs
-
-
 class FakeResponse:
-    parsed = None
     text = json.dumps(VALID_PROPOSAL)
 
 
@@ -58,11 +52,10 @@ class FakeClient:
 
 
 class GeminiProviderTests(unittest.TestCase):
-    def test_uses_stable_generate_content_with_pydantic_schema(self):
+    def test_uses_generate_content_with_response_json_schema(self):
         google_module = pytypes.ModuleType("google")
         genai_module = pytypes.ModuleType("google.genai")
         genai_module.Client = FakeClient
-        genai_module.types = pytypes.SimpleNamespace(GenerateContentConfig=FakeGenerateContentConfig)
         google_module.genai = genai_module
 
         with patch.dict(sys.modules, {"google": google_module, "google.genai": genai_module}):
@@ -75,8 +68,32 @@ class GeminiProviderTests(unittest.TestCase):
         call = client.models.calls[0]
         self.assertEqual("gemini-3.1-flash-lite", call["model"])
         self.assertEqual("prompt", call["contents"])
-        self.assertEqual("application/json", call["config"].kwargs["response_mime_type"])
-        self.assertIs(ModelProposal, call["config"].kwargs["response_schema"])
+        self.assertEqual("application/json", call["config"]["response_mime_type"])
+        self.assertIn("response_json_schema", call["config"])
+        self.assertNotIn("response_schema", call["config"])
+
+    def test_schema_contains_only_supported_keywords(self):
+        schema = GeminiProvider.response_json_schema()
+        unsupported = {"minLength", "maxLength", "default", "examples"}
+
+        def visit(value):
+            if isinstance(value, list):
+                for item in value:
+                    visit(item)
+                return
+            if not isinstance(value, dict):
+                return
+            for key, item in value.items():
+                self.assertNotIn(key, unsupported)
+                if key in {"properties", "$defs"} and isinstance(item, dict):
+                    for child in item.values():
+                        visit(child)
+                else:
+                    visit(item)
+
+        visit(schema)
+        self.assertEqual("object", schema["type"])
+        self.assertIn("summary", schema["properties"])
 
 
 if __name__ == "__main__":
