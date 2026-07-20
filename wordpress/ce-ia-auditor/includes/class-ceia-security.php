@@ -99,18 +99,28 @@ final class CEIA_Security {
             return new WP_Error( 'ceia_html_too_large', 'El HTML propuesto supera el límite de 2 MB.' );
         }
 
+        if ( preg_match( '/<\/?(script|iframe|object|embed|form|input|button|textarea|select|meta|link|base|video|audio|source|track|foreignobject|animate|set|image|use)\b/i', $html, $tag_match ) ) {
+            $tag = strtolower( (string) $tag_match[1] );
+            return new WP_Error(
+                'ceia_unsafe_html',
+                sprintf(
+                    'El HTML contiene la etiqueta no permitida <%s>. Los botones visuales deben ser enlaces <a> con CSS; no se admiten formularios ni controles interactivos.',
+                    $tag
+                )
+            );
+        }
+
         $forbidden = array(
-            '/<!doctype/i'                         => 'No se admite DOCTYPE.',
-            '/<\/?(?:html|head|body)\b/i'           => 'Solo debe proponerse el bloque de contenido, no un documento HTML completo.',
-            '/<\/?(?:script|iframe|object|embed|form|input|button|textarea|select|meta|link|base|video|audio|source|track|foreignobject|animate|set|image|use)\b/i' => 'El HTML contiene una etiqueta no permitida.',
-            '/<\/?span\b/i'                        => 'La plantilla del Consejo no utiliza etiquetas span.',
-            '/\son[a-z]+\s*=/i'                    => 'No se permiten manejadores JavaScript en atributos.',
-            '/(?:javascript|vbscript|data)\s*:/i'   => 'No se permiten URL ejecutables o incrustadas.',
-            '/@import\b/i'                         => 'No se permiten importaciones CSS.',
-            '/expression\s*\(/i'                  => 'No se permiten expresiones CSS.',
-            '/url\s*\(/i'                         => 'No se permiten recursos cargados desde CSS.',
-            '/position\s*:\s*fixed\b/i'           => 'No se permiten elementos fijos sobre la interfaz.',
-            '/xlink:href/i'                         => 'No se permiten referencias SVG externas.',
+            '/<!doctype/i'                       => 'No se admite DOCTYPE.',
+            '/<\/?(?:html|head|body)\b/i'         => 'Solo debe proponerse el bloque de contenido, no un documento HTML completo.',
+            '/<\/?span\b/i'                      => 'La plantilla del Consejo no utiliza etiquetas span.',
+            '/\son[a-z]+\s*=/i'                  => 'No se permiten manejadores JavaScript en atributos.',
+            '/(?:javascript|vbscript|data)\s*:/i' => 'No se permiten URL ejecutables o incrustadas.',
+            '/@import\b/i'                       => 'No se permiten importaciones CSS.',
+            '/expression\s*\(/i'                => 'No se permiten expresiones CSS.',
+            '/url\s*\(/i'                       => 'No se permiten recursos cargados desde CSS.',
+            '/position\s*:\s*fixed\b/i'         => 'No se permiten elementos fijos sobre la interfaz.',
+            '/xlink:href/i'                       => 'No se permiten referencias SVG externas.',
         );
 
         foreach ( $forbidden as $pattern => $message ) {
