@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
-import types as pytypes
 import unittest
 from unittest.mock import patch
 
 from ceia_worker.models import ModelProposal
-from ceia_worker.providers.gemini import GeminiProvider
+from ceia_worker.providers.gemini import GeminiProvider, ProviderError
 
 
 VALID_PROPOSAL = {
@@ -25,75 +23,63 @@ VALID_PROPOSAL = {
 }
 
 
-class FakeResponse:
-    text = json.dumps(VALID_PROPOSAL)
-
-
-class FakeModels:
-    def __init__(self):
-        self.calls = []
-
-    def generate_content(self, **kwargs):
-        self.calls.append(kwargs)
-        return FakeResponse()
-
-
-class FakeClient:
-    instances = []
-
-    def __init__(self, api_key):
-        self.api_key = api_key
-        self.models = FakeModels()
-        self.closed = False
-        self.__class__.instances.append(self)
-
-    def close(self):
-        self.closed = True
+def gemini_response(payload: dict) -> dict:
+    return {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [{"text": json.dumps(payload, ensure_ascii=False)}]
+                },
+                "finishReason": "STOP",
+            }
+        ]
+    }
 
 
 class GeminiProviderTests(unittest.TestCase):
-    def test_uses_generate_content_with_response_json_schema(self):
-        google_module = pytypes.ModuleType("google")
-        genai_module = pytypes.ModuleType("google.genai")
-        genai_module.Client = FakeClient
-        google_module.genai = genai_module
+    @patch("ceia_worker.providers.gemini.json_request")
+    def test_uses_stable_generate_content_rest_with_json_mode(self, request):
+        request.return_value = (200, gemini_response(VALID_PROPOSAL))
 
-        with patch.dict(sys.modules, {"google": google_module, "google.genai": genai_module}):
-            result = GeminiProvider("fake-key", "gemini-3.1-flash-lite").analyze("prompt")
+        result = GeminiProvider("fake-key", "gemini-3.1-flash-lite").analyze("prompt")
 
         self.assertIsInstance(result, ModelProposal)
-        client = FakeClient.instances[-1]
-        self.assertTrue(client.closed)
-        self.assertEqual(1, len(client.models.calls))
-        call = client.models.calls[0]
-        self.assertEqual("gemini-3.1-flash-lite", call["model"])
-        self.assertEqual("prompt", call["contents"])
-        self.assertEqual("application/json", call["config"]["response_mime_type"])
-        self.assertIn("response_json_schema", call["config"])
-        self.assertNotIn("response_schema", call["config"])
+        self.assertEqual("Contenido comprobado.", result.summary)
+        self.assertEqual(1, request.call_count)
+        url = request.call_args.args[0]
+        kwargs = request.call_args.kwargs
+        self.assertIn("/v1beta/models/gemini-3.1-flash-lite:generateContent", url)
+        self.assertIn("key=fake-key", url)
+        self.assertEqual("POST", kwargs["method"])
+        config = kwargs["payload"]["generationConfig"]
+        self.assertEqual("application/json", config["responseMimeType"])
+        self.assertNotIn("responseJsonSchema", config)
+        self.assertNotIn("response_json_schema", config)
 
-    def test_schema_contains_only_supported_keywords(self):
-        schema = GeminiProvider.response_json_schema()
-        unsupported = {"minLength", "maxLength", "default", "examples"}
+    @patch("ceia_worker.providers.gemini.json_request")
+    def test_retries_json_that_does_not_validate(self, request):
+        request.side_effect = [
+            (200, gemini_response({"summary": "incompleto"})),
+            (200, gemini_response(VALID_PROPOSAL)),
+        ]
 
-        def visit(value):
-            if isinstance(value, list):
-                for item in value:
-                    visit(item)
-                return
-            if not isinstance(value, dict):
-                return
-            for key, item in value.items():
-                self.assertNotIn(key, unsupported)
-                if key in {"properties", "$defs"} and isinstance(item, dict):
-                    for child in item.values():
-                        visit(child)
-                else:
-                    visit(item)
+        result = GeminiProvider("fake-key", "gemini-3.1-flash-lite").analyze("prompt")
 
-        visit(schema)
-        self.assertEqual("object", schema["type"])
-        self.assertIn("summary", schema["properties"])
+        self.assertEqual("Contenido comprobado.", result.summary)
+        self.assertEqual(2, request.call_count)
+
+    @patch("ceia_worker.providers.gemini.json_request")
+    def test_hides_key_in_http_error(self, request):
+        request.return_value = (
+            400,
+            {"error": {"message": "invalid request for fake-key"}},
+        )
+
+        with self.assertRaises(ProviderError) as caught:
+            GeminiProvider("fake-key", "gemini-3.1-flash-lite").analyze("prompt")
+
+        self.assertNotIn("fake-key", str(caught.exception))
+        self.assertIn("[clave oculta]", str(caught.exception))
 
 
 if __name__ == "__main__":
