@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import time
+import urllib.parse
 from typing import Any
 
 from pydantic import ValidationError
 
+from ..http import NetworkError, json_request
 from ..models import ModelProposal
 from .base import ProviderError, ProviderTemporaryError
 
@@ -12,29 +14,29 @@ from .base import ProviderError, ProviderTemporaryError
 class GeminiProvider:
     name = "gemini-free"
 
-    _SUPPORTED_SCHEMA_KEYS = {
-        "$id",
-        "$ref",
-        "$anchor",
-        "type",
-        "format",
-        "title",
-        "description",
-        "enum",
-        "items",
-        "prefixItems",
-        "minItems",
-        "maxItems",
-        "minimum",
-        "maximum",
-        "anyOf",
-        "oneOf",
-        "properties",
-        "additionalProperties",
-        "required",
-        "$defs",
-    }
-    _SUPPORTED_STRING_FORMATS = {"date", "date-time", "time"}
+    _OUTPUT_CONTRACT = """
+Devuelve exclusivamente un objeto JSON completo, sin Markdown ni comentarios, con esta estructura:
+{
+  "change_required": boolean,
+  "validation_status": "verified" | "verified_with_observations" | "human_review" | "conflict" | "insufficient_evidence",
+  "risk": "low" | "medium" | "high" | "critical",
+  "summary": string,
+  "proposed_title": string,
+  "proposed_content": string,
+  "index_patch": {
+    "nombre": string | null,
+    "tipo": [string] | null,
+    "url": string | null,
+    "abierto_permanente": boolean | null,
+    "fechas_adicionales": [{"fecha_inicio": "YYYY-MM-DD", "fecha_fin": "YYYY-MM-DD"}] | null
+  },
+  "changes": [{"section": string, "current": string, "proposed": string, "reason": string, "evidence_ids": [string]}],
+  "facts": [{"fact_id": string, "fact_type": "deadline" | "amount" | "eligibility" | "legal_basis" | "procedure" | "competent_body" | "contact" | "definition" | "other", "claim": string, "value": string, "evidence_ids": [string], "confidence": number}],
+  "conflicts": [{"topic": string, "statements": [string, string], "evidence_ids": [string, string], "recommended_resolution": string}],
+  "citations": [string]
+}
+Usa cadenas vacías, listas vacías y un objeto index_patch vacío cuando no proceda completar esos campos. No añadas ninguna clave distinta.
+""".strip()
 
     def __init__(self, api_key: str, model: str):
         if not api_key:
@@ -42,85 +44,108 @@ class GeminiProvider:
         self.api_key = api_key
         self.model = model
 
-    def _safe_error_message(self, exc: Exception) -> str:
-        message = " ".join(str(exc).split())
+    def _safe_message(self, value: Any) -> str:
+        message = " ".join(str(value).split())
         if self.api_key:
             message = message.replace(self.api_key, "[clave oculta]")
-        return (message or type(exc).__name__)[:800]
+        return (message or "error desconocido")[:800]
 
-    @classmethod
-    def _clean_schema(cls, value: Any) -> Any:
-        if isinstance(value, list):
-            return [cls._clean_schema(item) for item in value]
-        if not isinstance(value, dict):
-            return value
+    def _endpoint(self) -> str:
+        model = urllib.parse.quote(self.model.strip(), safe="-._")
+        key = urllib.parse.quote(self.api_key, safe="")
+        return (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{model}:generateContent?key={key}"
+        )
 
-        cleaned: dict[str, Any] = {}
-        for key, item in value.items():
-            if key not in cls._SUPPORTED_SCHEMA_KEYS:
-                continue
-            if key in {"properties", "$defs"} and isinstance(item, dict):
-                cleaned[key] = {
-                    str(name): cls._clean_schema(schema)
-                    for name, schema in item.items()
+    @staticmethod
+    def _extract_text(data: dict[str, Any]) -> str:
+        chunks: list[str] = []
+        candidates = data.get("candidates")
+        if isinstance(candidates, list):
+            for candidate in candidates[:1]:
+                if not isinstance(candidate, dict):
+                    continue
+                content = candidate.get("content")
+                if not isinstance(content, dict):
+                    continue
+                parts = content.get("parts")
+                if not isinstance(parts, list):
+                    continue
+                for part in parts:
+                    if isinstance(part, dict) and isinstance(part.get("text"), str):
+                        chunks.append(part["text"])
+        return "".join(chunks).strip()
+
+    def _generate(self, prompt: str) -> str:
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": prompt}],
                 }
-                continue
-            if key == "format" and item not in cls._SUPPORTED_STRING_FORMATS:
-                continue
-            cleaned[key] = cls._clean_schema(item)
-        return cleaned
+            ],
+            "generationConfig": {
+                "responseMimeType": "application/json",
+            },
+        }
+        try:
+            status, data = json_request(
+                self._endpoint(),
+                method="POST",
+                payload=payload,
+                timeout=180,
+                attempts=2,
+            )
+        except NetworkError as exc:
+            raise ProviderTemporaryError(
+                f"No se pudo contactar con Gemini: {self._safe_message(exc)}"
+            ) from exc
 
-    @classmethod
-    def response_json_schema(cls) -> dict[str, Any]:
-        """Devuelve solo el subconjunto de JSON Schema admitido por Gemini."""
-        return cls._clean_schema(ModelProposal.model_json_schema(mode="validation"))
+        error = data.get("error") if isinstance(data, dict) else None
+        error_message = error.get("message") if isinstance(error, dict) else ""
+        safe_error = self._safe_message(error_message or f"HTTP {status}")
+        if status in (408, 429, 500, 502, 503, 504):
+            raise ProviderTemporaryError(
+                f"Gemini gratuito está temporalmente limitado: {safe_error}"
+            )
+        if status < 200 or status >= 300:
+            raise ProviderError(f"Gemini rechazó la solicitud: {safe_error}")
+
+        output = self._extract_text(data)
+        if not output:
+            finish_reason = ""
+            candidates = data.get("candidates") if isinstance(data, dict) else None
+            if isinstance(candidates, list) and candidates and isinstance(candidates[0], dict):
+                finish_reason = str(candidates[0].get("finishReason", ""))
+            raise ProviderError(
+                "Gemini devolvió una respuesta vacía"
+                + (f" ({self._safe_message(finish_reason)})" if finish_reason else "")
+            )
+        return output
 
     def analyze(self, prompt: str) -> ModelProposal:
-        try:
-            from google import genai
-        except ImportError as exc:
-            raise ProviderError("No está instalado el paquete oficial google-genai") from exc
+        base_prompt = prompt.rstrip() + "\n\n" + self._OUTPUT_CONTRACT
+        last_error: ValidationError | None = None
 
-        client = genai.Client(api_key=self.api_key)
-        last_error: Exception | None = None
-        try:
-            for attempt in range(2):
-                try:
-                    response = client.models.generate_content(
-                        model=self.model,
-                        contents=prompt,
-                        config={
-                            "response_mime_type": "application/json",
-                            "response_json_schema": self.response_json_schema(),
-                        },
-                    )
+        for attempt in range(2):
+            current_prompt = base_prompt
+            if attempt and last_error is not None:
+                details = self._safe_message(last_error)
+                current_prompt += (
+                    "\n\nLa respuesta anterior no cumplió el contrato. Corrígela y devuelve "
+                    f"el objeto JSON completo. Error de validación: {details}"
+                )
+            output = self._generate(current_prompt)
+            try:
+                return ModelProposal.model_validate_json(output)
+            except ValidationError as exc:
+                last_error = exc
+                if attempt == 0:
+                    time.sleep(1)
+                    continue
 
-                    output = getattr(response, "text", None)
-                    if not output:
-                        raise ProviderError("Gemini devolvió una respuesta vacía")
-                    return ModelProposal.model_validate_json(output)
-                except ValidationError as exc:
-                    last_error = exc
-                    if attempt == 0:
-                        time.sleep(1)
-                        continue
-                except ProviderError:
-                    raise
-                except Exception as exc:  # El SDK usa excepciones HTTP propias según la versión.
-                    message = self._safe_error_message(exc)
-                    lowered = message.lower()
-                    if any(marker in lowered for marker in ("429", "quota", "rate limit", "503", "temporar")):
-                        raise ProviderTemporaryError(
-                            f"Gemini gratuito está temporalmente limitado: {message}"
-                        ) from exc
-                    if any(marker in lowered for marker in ("400", "bad request", "invalid argument")):
-                        raise ProviderError(
-                            f"Gemini rechazó la solicitud estructurada: {message}"
-                        ) from exc
-                    raise ProviderError(
-                        f"Gemini no pudo generar una propuesta estructurada: {message}"
-                    ) from exc
-        finally:
-            client.close()
-
-        raise ProviderError("La respuesta de Gemini no cumple el contrato JSON") from last_error
+        raise ProviderError(
+            "La respuesta JSON de Gemini no cumple el contrato: "
+            + self._safe_message(last_error)
+        ) from last_error
