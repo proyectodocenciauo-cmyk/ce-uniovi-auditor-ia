@@ -39,7 +39,7 @@ jobs:
           ref: main
           fetch-depth: 1
 
-      - name: Verificar worker 0.10.4 y REST estable
+      - name: Verificar worker 0.10.5 y REST estable
         shell: bash
         run: |
           set -euo pipefail
@@ -65,8 +65,8 @@ jobs:
           match = re.search(r'__version__\s*=\s*["\']([^"\']+)', text)
           version = match.group(1) if match else 'desconocida'
           print(f'Versión fuente: {version}')
-          if version < '0.10.4':
-              raise SystemExit('ERROR: versión del worker anterior a 0.10.4')
+          if version < '0.10.5':
+              raise SystemExit('ERROR: versión del worker anterior a 0.10.5')
           PY
 
       - name: Preparar Python
@@ -103,6 +103,6 @@ jobs:
         if: ${{ inputs.modo == 'probar_gemini' }}
         run: ceia-worker gemini-check
 
-      - name: Ejecutar piloto de un único trámite
+      - name: Limpiar trabajos antiguos y ejecutar el piloto
         if: ${{ inputs.modo == 'piloto_un_tramite' }}
-        run: ceia-worker run --max-jobs 1
+        run: ceia-worker run --max-jobs 3 --success-if-completed
