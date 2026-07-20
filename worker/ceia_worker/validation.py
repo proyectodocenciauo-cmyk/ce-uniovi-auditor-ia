@@ -29,6 +29,29 @@ CRITICAL_FACTS = {
     "competent_body",
     "contact",
 }
+FORBIDDEN_INTERACTIVE_TAGS = {
+    "script",
+    "iframe",
+    "object",
+    "embed",
+    "form",
+    "input",
+    "button",
+    "textarea",
+    "select",
+    "meta",
+    "link",
+    "base",
+    "video",
+    "audio",
+    "source",
+    "track",
+    "foreignobject",
+    "animate",
+    "set",
+    "image",
+    "use",
+}
 
 
 def _max_risk(left: str, right: str) -> str:
@@ -46,10 +69,19 @@ def _organisation_domain(url: str) -> str:
 def validate_html(html: str) -> list[str]:
     if not html.strip():
         return []
+
+    tag_pattern = r"</?(" + "|".join(sorted(FORBIDDEN_INTERACTIVE_TAGS, key=len, reverse=True)) + r")\b"
+    tag_match = re.search(tag_pattern, html, flags=re.IGNORECASE)
+    if tag_match:
+        tag = tag_match.group(1).lower()
+        raise UnsafeProposalError(
+            f"El HTML contiene la etiqueta no permitida <{tag}>. "
+            "Los botones visuales deben construirse con enlaces <a> y CSS; no uses formularios ni controles interactivos."
+        )
+
     forbidden = {
         r"<!doctype": "DOCTYPE",
         r"</?(?:html|head|body)\b": "documento HTML completo",
-        r"</?(?:script|iframe|object|embed|form|input|button|textarea|select|meta|link|base|video|audio|source|track|foreignobject|animate|set|image|use)\b": "etiqueta ejecutable o interactiva",
         r"</?span\b": "etiqueta span",
         r"\son[a-z]+\s*=": "manejador JavaScript",
         r"(?:javascript|vbscript|data)\s*:": "URL ejecutable o incrustada",
