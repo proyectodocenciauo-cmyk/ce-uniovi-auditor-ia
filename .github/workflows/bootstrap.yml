@@ -39,25 +39,34 @@ jobs:
           ref: main
           fetch-depth: 1
 
-      - name: Verificar worker 0.10.3 y API estable
+      - name: Verificar worker 0.10.4 y REST estable
         shell: bash
         run: |
           set -euo pipefail
           echo "Commit descargado: $(git rev-parse HEAD)"
-          if grep -R --line-number --fixed-string "interactions.create" worker/ceia_worker; then
+          PROVIDER="worker/ceia_worker/providers/gemini.py"
+          grep --line-number --fixed-string ':generateContent' "$PROVIDER"
+          grep --line-number --fixed-string 'responseMimeType' "$PROVIDER"
+          if grep --line-number --fixed-string 'interactions.create' "$PROVIDER"; then
             echo "ERROR: se ha detectado la API experimental de Gemini."
             exit 1
           fi
-          grep -R --line-number --fixed-string "client.models.generate_content" worker/ceia_worker/providers/gemini.py
-          grep -R --line-number --fixed-string "response_json_schema" worker/ceia_worker/providers/gemini.py
+          if grep --line-number --fixed-string 'response_json_schema' "$PROVIDER"; then
+            echo "ERROR: aún se está enviando un JSON Schema incompatible."
+            exit 1
+          fi
+          if grep --line-number --fixed-string 'google.genai' "$PROVIDER"; then
+            echo "ERROR: aún se está usando el SDK de Google."
+            exit 1
+          fi
           python - <<'PY'
           import pathlib, re
           text = pathlib.Path('worker/ceia_worker/__init__.py').read_text(encoding='utf-8')
           match = re.search(r'__version__\s*=\s*["\']([^"\']+)', text)
           version = match.group(1) if match else 'desconocida'
           print(f'Versión fuente: {version}')
-          if version < '0.10.3':
-              raise SystemExit('ERROR: versión del worker anterior a 0.10.3')
+          if version < '0.10.4':
+              raise SystemExit('ERROR: versión del worker anterior a 0.10.4')
           PY
 
       - name: Preparar Python
@@ -78,15 +87,13 @@ jobs:
           import inspect
           import ceia_worker
           from ceia_worker.providers.gemini import GeminiProvider
-          source = inspect.getsource(GeminiProvider.analyze)
+          source = inspect.getsource(GeminiProvider)
           print(f'Versión instalada: {ceia_worker.__version__}')
-          if 'interactions.create' in source:
-              raise SystemExit('ERROR: se instaló accidentalmente el proveedor antiguo')
-          if 'models.generate_content' not in source:
-              raise SystemExit('ERROR: no se instaló el proveedor estable esperado')
-          if 'response_json_schema' not in source:
-              raise SystemExit('ERROR: falta la configuración JSON Schema compatible')
-          print('Proveedor Gemini estable y esquema compatible verificados.')
+          if ':generateContent' not in source:
+              raise SystemExit('ERROR: no se instaló el endpoint REST estable')
+          if 'interactions.create' in source or 'response_json_schema' in source or 'google.genai' in source:
+              raise SystemExit('ERROR: se instaló accidentalmente una implementación antigua')
+          print('Proveedor Gemini REST estable verificado.')
           PY
 
       - name: Comprobar conexión privada con WordPress
