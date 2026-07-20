@@ -1,3 +1,3 @@
 """Trabajador de investigación de CE-IA."""
 
-__version__ = "0.10.4"
+__version__ = "0.10.5"
