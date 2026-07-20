@@ -39,7 +39,7 @@ jobs:
           ref: main
           fetch-depth: 1
 
-      - name: Verificar worker 0.10.5 y REST estable
+      - name: Verificar worker 0.10.6 y REST estable
         shell: bash
         run: |
           set -euo pipefail
@@ -59,14 +59,16 @@ jobs:
             echo "ERROR: aún se está usando el SDK de Google."
             exit 1
           fi
+          grep --line-number --fixed-string 'MANAGED_HOST = "www.unioviedo.es"' worker/ceia_worker/pipeline.py
+          grep --line-number --fixed-string 'CORRECCIÓN TÉCNICA OBLIGATORIA' worker/ceia_worker/pipeline.py
           python - <<'PY'
           import pathlib, re
           text = pathlib.Path('worker/ceia_worker/__init__.py').read_text(encoding='utf-8')
           match = re.search(r'__version__\s*=\s*["\']([^"\']+)', text)
           version = match.group(1) if match else 'desconocida'
           print(f'Versión fuente: {version}')
-          if version < '0.10.5':
-              raise SystemExit('ERROR: versión del worker anterior a 0.10.5')
+          if version < '0.10.6':
+              raise SystemExit('ERROR: versión del worker anterior a 0.10.6')
           PY
 
       - name: Preparar Python
@@ -87,13 +89,18 @@ jobs:
           import inspect
           import ceia_worker
           from ceia_worker.providers.gemini import GeminiProvider
+          from ceia_worker.pipeline import _is_managed_item_url
           source = inspect.getsource(GeminiProvider)
           print(f'Versión instalada: {ceia_worker.__version__}')
           if ':generateContent' not in source:
               raise SystemExit('ERROR: no se instaló el endpoint REST estable')
           if 'interactions.create' in source or 'response_json_schema' in source or 'google.genai' in source:
               raise SystemExit('ERROR: se instaló accidentalmente una implementación antigua')
-          print('Proveedor Gemini REST estable verificado.')
+          if not _is_managed_item_url('https://www.unioviedo.es/cestudiantes/index.php/tramite-ejemplo/'):
+              raise SystemExit('ERROR: el alcance del Consejo no admite una URL válida')
+          if _is_managed_item_url('https://www.uniovi.es/estudios/'):
+              raise SystemExit('ERROR: el alcance admite accidentalmente una URL externa')
+          print('Proveedor Gemini REST y alcance del Consejo verificados.')
           PY
 
       - name: Comprobar conexión privada con WordPress
@@ -103,6 +110,6 @@ jobs:
         if: ${{ inputs.modo == 'probar_gemini' }}
         run: ceia-worker gemini-check
 
-      - name: Limpiar trabajos antiguos y ejecutar el piloto
+      - name: Ejecutar piloto de un único trámite
         if: ${{ inputs.modo == 'piloto_un_tramite' }}
-        run: ceia-worker run --max-jobs 3 --success-if-completed
+        run: ceia-worker run --max-jobs 1
