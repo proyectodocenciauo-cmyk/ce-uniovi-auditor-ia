@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from . import __version__
-from .models import EvidenceRecord, RemoteConfig
+from .models import RemoteConfig
 from .prompting import build_prompt
 from .providers import AnalysisProvider, GeminiProvider, ProviderError, ProviderTemporaryError
 from .retrieval import Retriever
@@ -54,7 +54,6 @@ class Worker:
                 self.wordpress.fail(job_id, "research_validation_failed", str(exc))
             except Exception as exc:
                 stats["failed"] += 1
-                # No se envían trazas ni contenidos; solo clase y mensaje acotado.
                 safe_message = f"{type(exc).__name__}: {str(exc)[:800]}"
                 LOGGER.error("Fallo inesperado en job=%s: %s", job_id, safe_message)
                 try:
@@ -77,7 +76,10 @@ class Worker:
         evidence, retrieval_notes = Retriever(self.config).collect(context)
         usable = [entry for entry in evidence if entry.http_status == 200 and entry.excerpt.strip()]
         if not usable:
-            raise ProviderTemporaryError("No se pudo recuperar ninguna fuente utilizable")
+            raise ProviderError(
+                "No se pudo recuperar ninguna fuente utilizable. "
+                "Revisa la URL publicada o añade una fuente específica para este trámite."
+            )
 
         prompt = build_prompt(context, evidence, self.config, retrieval_notes)
         proposal = self.provider.analyze(prompt)
