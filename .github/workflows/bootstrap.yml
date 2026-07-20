@@ -10,6 +10,7 @@ on:
         type: choice
         options:
           - comprobar_conexion
+          - probar_gemini
           - piloto_un_tramite
 
 permissions:
@@ -38,7 +39,7 @@ jobs:
           ref: main
           fetch-depth: 1
 
-      - name: Verificar que el worker es 0.10.2 o posterior
+      - name: Verificar worker 0.10.3 y API estable
         shell: bash
         run: |
           set -euo pipefail
@@ -48,14 +49,15 @@ jobs:
             exit 1
           fi
           grep -R --line-number --fixed-string "client.models.generate_content" worker/ceia_worker/providers/gemini.py
+          grep -R --line-number --fixed-string "response_json_schema" worker/ceia_worker/providers/gemini.py
           python - <<'PY'
           import pathlib, re
           text = pathlib.Path('worker/ceia_worker/__init__.py').read_text(encoding='utf-8')
           match = re.search(r'__version__\s*=\s*["\']([^"\']+)', text)
           version = match.group(1) if match else 'desconocida'
           print(f'Versión fuente: {version}')
-          if version < '0.10.2':
-              raise SystemExit('ERROR: versión del worker anterior a 0.10.2')
+          if version < '0.10.3':
+              raise SystemExit('ERROR: versión del worker anterior a 0.10.3')
           PY
 
       - name: Preparar Python
@@ -82,11 +84,17 @@ jobs:
               raise SystemExit('ERROR: se instaló accidentalmente el proveedor antiguo')
           if 'models.generate_content' not in source:
               raise SystemExit('ERROR: no se instaló el proveedor estable esperado')
-          print('Proveedor Gemini estable verificado.')
+          if 'response_json_schema' not in source:
+              raise SystemExit('ERROR: falta la configuración JSON Schema compatible')
+          print('Proveedor Gemini estable y esquema compatible verificados.')
           PY
 
       - name: Comprobar conexión privada con WordPress
         run: ceia-worker status
+
+      - name: Probar Gemini sin reclamar ningún trámite
+        if: ${{ inputs.modo == 'probar_gemini' }}
+        run: ceia-worker gemini-check
 
       - name: Ejecutar piloto de un único trámite
         if: ${{ inputs.modo == 'piloto_un_tramite' }}
