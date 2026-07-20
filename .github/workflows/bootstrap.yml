@@ -1,4 +1,4 @@
-name: CE-IA · Conexión y piloto gratuito
+name: CE-IA · Conexión y procesamiento gratuito
 
 on:
   workflow_dispatch:
@@ -12,19 +12,30 @@ on:
           - comprobar_conexion
           - probar_gemini
           - piloto_un_tramite
+          - procesar_lote
+      cantidad:
+        description: Número máximo de trámites para procesar en modo lote
+        required: true
+        default: "5"
+        type: choice
+        options:
+          - "3"
+          - "5"
+          - "10"
+          - "25"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ceia-piloto-manual
+  group: ceia-procesamiento-manual
   cancel-in-progress: false
 
 jobs:
   ceia:
     name: CE-IA · ${{ inputs.modo }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       CEIA_WP_URL: ${{ secrets.CEIA_WP_URL }}
       CEIA_WP_USER: ${{ secrets.CEIA_WP_USER }}
@@ -113,3 +124,7 @@ jobs:
       - name: Ejecutar piloto de un único trámite
         if: ${{ inputs.modo == 'piloto_un_tramite' }}
         run: ceia-worker run --max-jobs 1
+
+      - name: Procesar lote de trámites
+        if: ${{ inputs.modo == 'procesar_lote' }}
+        run: ceia-worker run --max-jobs "${{ inputs.cantidad }}" --success-if-completed
