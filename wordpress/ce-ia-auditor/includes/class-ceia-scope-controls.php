@@ -84,9 +84,7 @@ final class CEIA_Scope_Controls {
                         'last_status' => 'out_of_scope',
                         'updated_gmt' => CEIA_Repository::now(),
                     ),
-                    array( 'id' => $item_id ),
-                    array( '%d', '%s', '%s' ),
-                    array( '%d' )
+                    array( 'id' => $item_id )
                 );
             }
         }
@@ -129,9 +127,7 @@ final class CEIA_Scope_Controls {
             array(
                 'id'    => absint( $job_id ),
                 'state' => 'queued',
-            ),
-            array( '%s', '%s', '%s', null, '%s', '%s' ),
-            array( '%d', '%s' )
+            )
         );
 
         if ( 1 !== $updated ) {
