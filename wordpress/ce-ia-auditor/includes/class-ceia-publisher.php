@@ -15,13 +15,27 @@ final class CEIA_Publisher {
             return new WP_Error( 'ceia_blocked_proposal', 'No puede aprobarse: existen conflictos o pruebas insuficientes. Debe repetirse la investigación o corregirse la fuente.' );
         }
 
+        $quality = CEIA_Quality::get_report( $proposal_id );
+        if ( ! $quality || 'pass' !== ( $quality['gate'] ?? '' ) ) {
+            return new WP_Error( 'ceia_quality_block', 'No puede aprobarse: la propuesta no ha superado la puerta de calidad independiente.' );
+        }
+
+        if ( in_array( $proposal['risk'], array( 'high', 'critical' ), true ) && 'verified' !== $proposal['validation_status'] ) {
+            return new WP_Error( 'ceia_high_risk_block', 'Los trámites de riesgo alto o crítico solo pueden aprobarse con validación verified sin observaciones.' );
+        }
+
+        $note = CEIA_Security::sanitize_review_note( $note );
+        if ( '' === trim( $note ) ) {
+            return new WP_Error( 'ceia_review_note_required', 'Indica qué fuentes, cambios y capturas has comprobado antes de aprobar.' );
+        }
+
         $updated = CEIA_Repository::update_proposal(
             $proposal_id,
             array(
                 'status'       => 'approved',
                 'reviewed_by'  => get_current_user_id(),
                 'reviewed_gmt' => CEIA_Repository::now(),
-                'review_note'  => CEIA_Security::sanitize_review_note( $note ),
+                'review_note'  => $note,
             )
         );
 
@@ -63,8 +77,6 @@ final class CEIA_Publisher {
     }
 
     public static function publish( $proposal_id ) {
-        global $wpdb;
-
         $proposal = CEIA_Repository::get_proposal( $proposal_id );
         if ( ! $proposal || 'approved' !== $proposal['status'] ) {
             return new WP_Error( 'ceia_not_approved', 'La propuesta debe aprobarse antes de publicarla.' );
@@ -72,6 +84,11 @@ final class CEIA_Publisher {
 
         if ( ! in_array( $proposal['validation_status'], array( 'verified', 'verified_with_observations', 'human_review' ), true ) ) {
             return new WP_Error( 'ceia_validation_block', 'El estado de validación impide publicar esta propuesta.' );
+        }
+
+        $quality = CEIA_Quality::pre_publish( $proposal );
+        if ( is_wp_error( $quality ) ) {
+            return $quality;
         }
 
         $current = self::current_snapshot( $proposal );
@@ -109,41 +126,62 @@ final class CEIA_Publisher {
             $post_changed = true;
         }
 
-        $patch       = CEIA_Security::safe_json( $proposal['proposed_fields_json'] );
+        $patch = CEIA_Security::safe_json( $proposal['proposed_fields_json'] );
         $index_result = self::apply_index_patch( $proposal, $patch );
         if ( is_wp_error( $index_result ) ) {
-            if ( $post_changed ) {
-                wp_update_post(
-                    wp_slash(
-                        array(
-                            'ID'           => absint( $proposal['post_id'] ),
-                            'post_title'   => (string) $proposal['current_title'],
-                            'post_content' => (string) $proposal['current_content'],
-                        )
-                    )
-                );
-            }
+            self::restore_changed_content( $proposal, $current, $post_changed );
             return $index_result;
+        }
+
+        $public_check = CEIA_Quality::verify_after_publish( $proposal, $patch );
+        if ( is_wp_error( $public_check ) ) {
+            self::restore_changed_content( $proposal, $current, $post_changed );
+            return $public_check;
         }
 
         $updated = CEIA_Repository::update_proposal(
             $proposal_id,
             array(
-                'status'       => 'published',
-                'published_by' => get_current_user_id(),
-                'published_gmt'=> CEIA_Repository::now(),
+                'status'        => 'published',
+                'published_by'  => get_current_user_id(),
+                'published_gmt' => CEIA_Repository::now(),
             )
         );
 
         if ( ! $updated ) {
-            return new WP_Error( 'ceia_publish_state_failed', 'El contenido se actualizó, pero no pudo registrarse el estado de publicación. No publiques otra propuesta hasta revisar el registro.' );
+            self::restore_changed_content( $proposal, $current, $post_changed );
+            return new WP_Error( 'ceia_publish_state_failed', 'La verificación terminó, pero no pudo registrarse el estado. Los cambios se han restaurado.' );
         }
 
         $after = self::current_snapshot( $proposal );
         CEIA_Repository::update_item_after_publish( absint( $proposal['item_id'] ), 'published', is_wp_error( $after ) ? '' : $after['hash'] );
-        CEIA_Repository::log( 'proposal_published', 'proposal', $proposal_id, array( 'post_changed' => $post_changed, 'index_changed' => ! empty( $patch ) ) );
+        CEIA_Repository::log(
+            'proposal_published',
+            'proposal',
+            $proposal_id,
+            array(
+                'post_changed'       => $post_changed,
+                'index_changed'      => ! empty( $patch ),
+                'public_verification'=> 'passed',
+            )
+        );
 
         return true;
+    }
+
+    private static function restore_changed_content( $proposal, $current, $post_changed ) {
+        if ( $post_changed ) {
+            wp_update_post(
+                wp_slash(
+                    array(
+                        'ID'           => absint( $proposal['post_id'] ),
+                        'post_title'   => (string) $proposal['current_title'],
+                        'post_content' => (string) $current['content'],
+                    )
+                )
+            );
+        }
+        self::restore_index_fields( $proposal, $current['fields'] );
     }
 
     public static function rollback( $proposal_id ) {
@@ -216,7 +254,7 @@ final class CEIA_Publisher {
         $fields = array();
         if ( 'tramite' === $proposal['object_type'] ) {
             $fields = $wpdb->get_row(
-                $wpdb->prepare( "SELECT * FROM `{$tables['tramites']}` WHERE id = %d", absint( $proposal['object_id'] ) ), // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                $wpdb->prepare( "SELECT * FROM `{$tables['tramites']}` WHERE id = %d", absint( $proposal['object_id'] ) ),
                 ARRAY_A
             );
             if ( ! $fields ) {
@@ -259,6 +297,9 @@ final class CEIA_Publisher {
             $url = CEIA_Security::validate_https_url( $patch['url'] );
             if ( is_wp_error( $url ) ) {
                 return $url;
+            }
+            if ( 0 !== strpos( $url, CEIA_Quality::MANAGED_PREFIX ) ) {
+                return new WP_Error( 'ceia_index_scope', 'El índice solo puede apuntar a una página de la web del Consejo.' );
             }
             $data['url'] = $url;
             $formats[]   = '%s';
