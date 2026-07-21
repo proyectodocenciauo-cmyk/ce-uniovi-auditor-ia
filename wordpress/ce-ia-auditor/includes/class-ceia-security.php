@@ -16,16 +16,13 @@ final class CEIA_Security {
         if ( '' === $plaintext ) {
             return '';
         }
-
         if ( ! function_exists( 'sodium_crypto_secretbox' ) ) {
             return new WP_Error( 'ceia_sodium_missing', 'El servidor no dispone de Sodium; el secreto no se ha guardado.' );
         }
-
         try {
             $key        = self::encryption_key();
             $nonce      = random_bytes( SODIUM_CRYPTO_SECRETBOX_NONCEBYTES );
             $ciphertext = sodium_crypto_secretbox( $plaintext, $nonce, $key );
-
             return self::SECRET_PREFIX . base64_encode( $nonce . $ciphertext );
         } catch ( Exception $exception ) {
             return new WP_Error( 'ceia_secret_encrypt_failed', 'No se pudo cifrar el secreto.' );
@@ -37,30 +34,24 @@ final class CEIA_Security {
         if ( '' === $stored ) {
             return '';
         }
-
         if ( 0 !== strpos( $stored, self::SECRET_PREFIX ) || ! function_exists( 'sodium_crypto_secretbox_open' ) ) {
             return '';
         }
-
         $decoded = base64_decode( substr( $stored, strlen( self::SECRET_PREFIX ) ), true );
         if ( false === $decoded || strlen( $decoded ) <= SODIUM_CRYPTO_SECRETBOX_NONCEBYTES ) {
             return '';
         }
-
         $nonce      = substr( $decoded, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES );
         $ciphertext = substr( $decoded, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES );
         $plaintext  = sodium_crypto_secretbox_open( $ciphertext, $nonce, self::encryption_key() );
-
         return false === $plaintext ? '' : $plaintext;
     }
 
     private static function encryption_key() {
         $material = wp_salt( 'auth' ) . '|' . wp_salt( 'secure_auth' );
-
         if ( function_exists( 'hash_hkdf' ) ) {
             return hash_hkdf( 'sha256', $material, SODIUM_CRYPTO_SECRETBOX_KEYBYTES, 'ceia-secrets-v1' );
         }
-
         return substr( hash( 'sha256', $material, true ), 0, SODIUM_CRYPTO_SECRETBOX_KEYBYTES );
     }
 
@@ -73,19 +64,16 @@ final class CEIA_Security {
         if ( '' === $url || ! wp_http_validate_url( $url ) ) {
             return new WP_Error( 'ceia_invalid_url', 'La URL debe ser HTTPS y válida.' );
         }
-
         $host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
         if ( '' === $host || 'localhost' === $host || preg_match( '/(^|\.)local$/', $host ) ) {
             return new WP_Error( 'ceia_invalid_host', 'No se permiten destinos locales.' );
         }
-
         if ( filter_var( $host, FILTER_VALIDATE_IP ) ) {
             $public = filter_var( $host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE );
             if ( false === $public ) {
                 return new WP_Error( 'ceia_private_host', 'No se permiten direcciones IP privadas o reservadas.' );
             }
         }
-
         return $url;
     }
 
@@ -94,11 +82,9 @@ final class CEIA_Security {
         if ( '' === trim( $html ) ) {
             return true;
         }
-
         if ( strlen( $html ) > 2000000 ) {
             return new WP_Error( 'ceia_html_too_large', 'El HTML propuesto supera el límite de 2 MB.' );
         }
-
         if ( preg_match( '/<\/?(script|iframe|object|embed|form|input|button|textarea|select|meta|link|base|video|audio|source|track|foreignobject|animate|set|image|use)\b/i', $html, $tag_match ) ) {
             $tag = strtolower( (string) $tag_match[1] );
             return new WP_Error(
@@ -109,7 +95,6 @@ final class CEIA_Security {
                 )
             );
         }
-
         $forbidden = array(
             '/<!doctype/i'                       => 'No se admite DOCTYPE.',
             '/<\/?(?:html|head|body)\b/i'         => 'Solo debe proponerse el bloque de contenido, no un documento HTML completo.',
@@ -122,18 +107,36 @@ final class CEIA_Security {
             '/position\s*:\s*fixed\b/i'         => 'No se permiten elementos fijos sobre la interfaz.',
             '/xlink:href/i'                       => 'No se permiten referencias SVG externas.',
         );
-
         foreach ( $forbidden as $pattern => $message ) {
             if ( preg_match( $pattern, $html ) ) {
                 return new WP_Error( 'ceia_unsafe_html', $message );
             }
         }
-
         if ( ! preg_match( '/<section\b[^>]*\bid=["\']([a-zA-Z][a-zA-Z0-9_-]*)["\']/i', $html, $root_match ) ) {
             return new WP_Error( 'ceia_unscoped_html', 'La propuesta debe incluir una sección raíz con un identificador único.' );
         }
-
         $root_id = $root_match[1];
+
+        preg_match_all( '/\bid=["\']([^"\']+)["\']/i', $html, $id_matches );
+        $ids = $id_matches[1] ?? array();
+        $duplicates = array();
+        foreach ( array_count_values( $ids ) as $id => $count ) {
+            if ( $count > 1 ) {
+                $duplicates[] = $id;
+            }
+        }
+        if ( $duplicates ) {
+            return new WP_Error( 'ceia_duplicate_ids', 'El HTML contiene identificadores duplicados: ' . implode( ', ', array_slice( $duplicates, 0, 10 ) ) . '.' );
+        }
+
+        preg_match_all( '/<h([1-6])\b/i', $html, $heading_matches );
+        $levels = array_map( 'absint', $heading_matches[1] ?? array() );
+        for ( $index = 1; $index < count( $levels ); $index++ ) {
+            if ( $levels[ $index ] > $levels[ $index - 1 ] + 1 ) {
+                return new WP_Error( 'ceia_heading_skip', 'La jerarquía de encabezados salta de h' . $levels[ $index - 1 ] . ' a h' . $levels[ $index ] . '.' );
+            }
+        }
+
         if ( preg_match_all( '/<style\b[^>]*>(.*?)<\/style>/is', $html, $style_matches ) ) {
             foreach ( $style_matches[1] as $css ) {
                 if ( preg_match( '/(^|[},])\s*(?:html|body|:root)\b/im', $css ) ) {
@@ -153,6 +156,19 @@ final class CEIA_Security {
             }
         }
 
+        if ( preg_match_all( '/<a\b([^>]*)>/i', $html, $anchor_matches ) ) {
+            foreach ( $anchor_matches[1] as $attributes ) {
+                if ( ! preg_match( '/\bhref\s*=\s*["\']([^"\']*)["\']/i', $attributes, $href_match ) || '' === trim( $href_match[1] ) || '#' === trim( $href_match[1] ) ) {
+                    return new WP_Error( 'ceia_empty_link', 'La propuesta contiene un enlace vacío o con destino #.' );
+                }
+                if ( preg_match( '/\btarget\s*=\s*["\']_blank["\']/i', $attributes ) ) {
+                    if ( ! preg_match( '/\brel\s*=\s*["\'][^"\']*noopener[^"\']*noreferrer[^"\']*["\']/i', $attributes ) ) {
+                        return new WP_Error( 'ceia_unsafe_target', 'Los enlaces que se abren en otra pestaña deben incluir rel="noopener noreferrer".' );
+                    }
+                }
+            }
+        }
+
         if ( preg_match_all( '/\s(?:href|src)\s*=\s*["\']([^"\']+)["\']/i', $html, $url_matches ) ) {
             foreach ( $url_matches[1] as $url ) {
                 if ( 0 === strpos( $url, '#' ) || 0 === strpos( $url, '/' ) || 0 === strpos( $url, 'mailto:' ) || 0 === strpos( $url, 'tel:' ) ) {
@@ -163,7 +179,6 @@ final class CEIA_Security {
                 }
             }
         }
-
         return true;
     }
 
@@ -171,7 +186,6 @@ final class CEIA_Security {
         if ( is_array( $value ) ) {
             return $value;
         }
-
         $decoded = json_decode( (string) $value, true );
         return is_array( $decoded ) ? $decoded : $default;
     }
