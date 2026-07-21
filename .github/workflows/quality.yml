@@ -1,0 +1,44 @@
+name: CE-IA · Pruebas de seguridad
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - 'wordpress/ce-ia-auditor/**'
+      - '.github/workflows/**'
+  pull_request:
+    paths:
+      - 'worker/**'
+      - 'wordpress/ce-ia-auditor/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: worker/pyproject.toml
+      - name: Instalar dependencias
+        run: python -m pip install './worker[dev]'
+      - name: Instalar Chromium
+        run: playwright install --with-deps chromium
+      - name: Pruebas Python
+        run: pytest worker/tests
+      - name: Sintaxis PHP
+        run: find wordpress/ce-ia-auditor -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Comprobar que la automatización está congelada
+        run: |
+          if grep -R --line-number --fixed-string 'schedule:' .github/workflows/audit.yml; then
+            echo 'ERROR: el procesamiento automático horario se ha reactivado.'
+            exit 1
+          fi
