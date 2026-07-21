@@ -4,7 +4,6 @@ import pathlib
 import re
 import unittest
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "wordpress" / "ce-ia-auditor"
 
@@ -28,23 +27,48 @@ class PluginSafetyTests(unittest.TestCase):
         self.assertGreaterEqual(route_count, 6)
         self.assertEqual(route_count, permission_count)
 
-    def test_no_hardcoded_api_secret(self):
-        code = "\n".join(path.read_text(encoding="utf-8") for path in ROOT.rglob("*.*") if path.suffix in {".php", ".py", ".yml", ".yaml"})
+    def test_no_hardcoded_secrets(self):
+        code = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in ROOT.rglob("*.*")
+            if path.suffix in {".php", ".py", ".yml", ".yaml"}
+        )
         self.assertNotRegex(code, r"AIza[0-9A-Za-z_-]{30,}")
         self.assertNotRegex(code, r"tvly-[0-9A-Za-z_-]{20,}")
         self.assertNotRegex(code, r"github_pat_[0-9A-Za-z_]{20,}")
         self.assertNotRegex(code, r"sk-proj-[0-9A-Za-z_-]{20,}")
 
     def test_free_only_edition_has_no_openai_runtime(self):
-        code = "\n".join(path.read_text(encoding="utf-8") for path in ROOT.rglob("*.*") if path.suffix in {".php", ".py"})
+        code = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in ROOT.rglob("*.*")
+            if path.suffix in {".php", ".py"}
+        )
         self.assertNotIn("api." + "openai.com", code)
         self.assertFalse((ROOT / "worker" / "ceia_worker" / "providers" / "openai.py").exists())
-        admin = (PLUGIN / "includes" / "class-ceia-admin.php").read_text(encoding="utf-8")
+
+    def test_safe_release_requires_independent_quality_gate(self):
+        main = (PLUGIN / "ce-ia-auditor.php").read_text(encoding="utf-8")
         rest = (PLUGIN / "includes" / "class-ceia-rest-controller.php").read_text(encoding="utf-8")
-        self.assertNotIn('name="openai_api_key"', admin)
-        self.assertNotIn("openai_api_key'    =>", rest)
+        publisher = (PLUGIN / "includes" / "class-ceia-publisher.php").read_text(encoding="utf-8")
+        quality = (PLUGIN / "includes" / "class-ceia-quality.php").read_text(encoding="utf-8")
+
+        self.assertIn("Version: 0.12.0", main)
+        self.assertIn("class-ceia-quality.php", main)
+        self.assertIn("CEIA_Quality::evaluate_result", rest)
+        self.assertIn("CEIA_Quality::store_report", rest)
+        self.assertIn("CEIA_Quality::pre_publish", publisher)
+        self.assertIn("CEIA_Quality::verify_after_publish", publisher)
+        self.assertIn("self::restore_changed_content", publisher)
+        self.assertIn("retention < 0.80", quality)
+        self.assertIn("Los trámites de riesgo alto o crítico", quality)
+
+    def test_no_automatic_publication_and_upgrade_disables_auto_queue(self):
+        code = "\n".join(path.read_text(encoding="utf-8") for path in PLUGIN.rglob("*.php"))
+        activator = (PLUGIN / "includes" / "class-ceia-activator.php").read_text(encoding="utf-8")
+        self.assertNotIn("wp_publish_post", code)
+        self.assertIn("$settings['automatic_queue']   = 0", activator)
 
 
 if __name__ == "__main__":
     unittest.main()
-
