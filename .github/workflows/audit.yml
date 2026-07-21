@@ -1,4 +1,4 @@
-name: CE-IA · Procesamiento automático
+name: CE-IA · Auditoría segura
 
 on:
   workflow_dispatch:
@@ -8,26 +8,24 @@ on:
         required: false
         default: wordpress
         type: string
-  schedule:
-    - cron: "17 * * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ceia-procesamiento
+  group: ceia-auditoria-segura
   cancel-in-progress: false
 
 jobs:
   procesar:
-    name: Procesar cola CE-IA
+    name: Validar y procesar cola CE-IA
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       CEIA_WP_URL: ${{ secrets.CEIA_WP_URL }}
       CEIA_WP_USER: ${{ secrets.CEIA_WP_USER }}
       CEIA_WP_APP_PASSWORD: ${{ secrets.CEIA_WP_APP_PASSWORD }}
-      CEIA_WORKER_ID: github-actions-auto
+      CEIA_WORKER_ID: github-actions-safe
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PYTHONUNBUFFERED: "1"
     steps:
@@ -44,8 +42,14 @@ jobs:
           cache: pip
           cache-dependency-path: worker/pyproject.toml
 
-      - name: Instalar el trabajador actual
-        run: python -m pip install --no-cache-dir --force-reinstall ./worker
+      - name: Instalar el trabajador seguro
+        run: python -m pip install --no-cache-dir --force-reinstall './worker[dev]'
+
+      - name: Instalar Chromium para pruebas responsive reales
+        run: playwright install --with-deps chromium
+
+      - name: Ejecutar pruebas de seguridad
+        run: pytest worker/tests
 
       - name: Comprobar WordPress
         run: ceia-worker status
