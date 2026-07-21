@@ -111,21 +111,21 @@ final class CEIA_REST_Controller {
 
         return rest_ensure_response(
             array(
-                'site_url'          => home_url( '/' ),
-                'plugin_version'    => CEIA_VERSION,
-                'analysis_provider'=> 'gemini',
-                'gemini_model'      => sanitize_text_field( $settings['gemini_model'] ),
-                'gemini_api_key'    => CEIA_Security::decrypt_secret( $settings['gemini_api_key'] ),
-                'tavily_enabled'    => ! empty( $settings['tavily_enabled'] ),
-                'tavily_api_key'    => CEIA_Security::decrypt_secret( $settings['tavily_api_key'] ),
-                'limits'            => array(
+                'site_url'           => home_url( '/' ),
+                'plugin_version'     => CEIA_VERSION,
+                'analysis_provider'  => 'gemini',
+                'gemini_model'       => sanitize_text_field( $settings['gemini_model'] ),
+                'gemini_api_key'     => CEIA_Security::decrypt_secret( $settings['gemini_api_key'] ),
+                'tavily_enabled'     => ! empty( $settings['tavily_enabled'] ),
+                'tavily_api_key'     => CEIA_Security::decrypt_secret( $settings['tavily_api_key'] ),
+                'limits'             => array(
                     'max_jobs_per_run'     => max( 1, min( 25, absint( $settings['max_jobs_per_run'] ) ) ),
                     'max_sources_per_job'  => max( 3, min( 30, absint( $settings['max_sources_per_job'] ) ) ),
                     'max_searches_per_job' => max( 0, min( 5, absint( $settings['max_searches_per_job'] ) ) ),
                     'max_source_bytes'     => max( 100000, min( 10000000, absint( $settings['max_source_bytes'] ) ) ),
                 ),
-                'allowed_source_hosts'=> array_values( $hosts ),
-                'editorial_policy'   => CEIA_Repository::editorial_policy(),
+                'allowed_source_hosts' => array_values( $hosts ),
+                'editorial_policy'    => CEIA_Repository::editorial_policy(),
             )
         );
     }
@@ -136,11 +136,7 @@ final class CEIA_REST_Controller {
             return $context;
         }
 
-        return rest_ensure_response(
-            array(
-                'job' => $context,
-            )
-        );
+        return rest_ensure_response( array( 'job' => $context ) );
     }
 
     public function submit_result( WP_REST_Request $request ) {
@@ -149,9 +145,17 @@ final class CEIA_REST_Controller {
             return new WP_Error( 'ceia_invalid_json', 'El resultado debe enviarse como JSON.', array( 'status' => 400 ) );
         }
 
+        list( $data, $quality_report ) = CEIA_Quality::evaluate_result( $request['job_id'], $data );
+        $previews = is_array( $data['previews'] ?? null ) ? $data['previews'] : array();
+        unset( $data['previews'], $data['quality_report'], $data['publication_gate'] );
+
         $result = CEIA_Repository::complete_job( $request['job_id'], $data );
         if ( is_wp_error( $result ) ) {
             return $result;
+        }
+
+        if ( ! empty( $result['proposal_id'] ) ) {
+            CEIA_Quality::store_report( absint( $result['proposal_id'] ), $quality_report, $previews );
         }
 
         return rest_ensure_response( array( 'ok' => true, 'result' => $result ) );
@@ -168,7 +172,11 @@ final class CEIA_REST_Controller {
 
     public function heartbeat( WP_REST_Request $request ) {
         $data = $request->get_json_params();
-        return rest_ensure_response( array( 'ok' => true, 'heartbeat' => CEIA_Repository::record_heartbeat( is_array( $data ) ? $data : array() ) ) );
+        return rest_ensure_response(
+            array(
+                'ok'        => true,
+                'heartbeat' => CEIA_Repository::record_heartbeat( is_array( $data ) ? $data : array() ),
+            )
+        );
     }
 }
-
