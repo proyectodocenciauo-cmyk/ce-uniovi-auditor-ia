@@ -32,27 +32,9 @@ CRITICAL_FACTS = {
     "contact",
 }
 FORBIDDEN_INTERACTIVE_TAGS = {
-    "script",
-    "iframe",
-    "object",
-    "embed",
-    "form",
-    "input",
-    "button",
-    "textarea",
-    "select",
-    "meta",
-    "link",
-    "base",
-    "video",
-    "audio",
-    "source",
-    "track",
-    "foreignobject",
-    "animate",
-    "set",
-    "image",
-    "use",
+    "script", "iframe", "object", "embed", "form", "input", "button", "textarea",
+    "select", "meta", "link", "base", "video", "audio", "source", "track",
+    "foreignobject", "animate", "set", "image", "use",
 }
 
 
@@ -76,22 +58,8 @@ def _norm_contains(haystack: str, needle: str) -> bool:
 
 def _claim_overlap(claim: str, quote: str) -> float:
     stop = {
-        "para",
-        "como",
-        "desde",
-        "hasta",
-        "sobre",
-        "entre",
-        "esta",
-        "este",
-        "estos",
-        "estas",
-        "debe",
-        "puede",
-        "seran",
-        "sera",
-        "universidad",
-        "oviedo",
+        "para", "como", "desde", "hasta", "sobre", "entre", "esta", "este", "estos",
+        "estas", "debe", "puede", "seran", "sera", "universidad", "oviedo",
     }
     claim_words = {
         word for word in re.findall(r"[a-z0-9@.]{4,}", normalize_text(claim)) if word not in stop
@@ -189,44 +157,26 @@ def validate_proposal(
             str(entry.url) for entry in required_failures[:10]
         )
         errors.append(detail)
-        checks.append(
-            QualityCheck(
-                check_id="required_sources",
-                label="Fuentes obligatorias",
-                status="blocked",
-                detail=detail,
-            )
-        )
+        checks.append(QualityCheck(check_id="required_sources", label="Fuentes obligatorias", status="blocked", detail=detail))
     else:
-        checks.append(
-            QualityCheck(
-                check_id="required_sources",
-                label="Fuentes obligatorias",
-                status="pass",
-                detail="No hay fallos de lectura en fuentes marcadas como obligatorias.",
-            )
-        )
+        checks.append(QualityCheck(
+            check_id="required_sources",
+            label="Fuentes obligatorias",
+            status="pass",
+            detail="No hay fallos de lectura en fuentes marcadas como obligatorias.",
+        ))
 
     if proposal.change_required and not primary:
         detail = "No se recuperó una fuente primaria oficial y relevante para justificar cambios."
         errors.append(detail)
-        checks.append(
-            QualityCheck(
-                check_id="primary_source",
-                label="Fuente primaria",
-                status="blocked",
-                detail=detail,
-            )
-        )
+        checks.append(QualityCheck(check_id="primary_source", label="Fuente primaria", status="blocked", detail=detail))
     else:
-        checks.append(
-            QualityCheck(
-                check_id="primary_source",
-                label="Fuente primaria",
-                status="pass",
-                detail="; ".join(str(entry.url) for entry in primary[:5]) or "No aplicable.",
-            )
-        )
+        checks.append(QualityCheck(
+            check_id="primary_source",
+            label="Fuente primaria",
+            status="pass",
+            detail="; ".join(str(entry.url) for entry in primary[:5]) or "No aplicable.",
+        ))
 
     invalid_citations = sorted(set(proposal.citations) - set(evidence_map))
     if invalid_citations:
@@ -234,7 +184,8 @@ def validate_proposal(
 
     risk = _max_risk(item_risk, proposal.risk)
     detected_conflicts: list[str] = []
-    values_by_type: dict[str, set[str]] = {}
+    values_by_subject: dict[tuple[str, str], set[str]] = {}
+    evidence_by_subject: dict[tuple[str, str], set[str]] = {}
 
     for fact in proposal.facts:
         cited_ids = set(fact.evidence_ids) | {support.evidence_id for support in fact.supports}
@@ -245,20 +196,14 @@ def validate_proposal(
         for support in fact.supports:
             entry = usable.get(support.evidence_id)
             if not entry:
-                errors.append(
-                    f"El hecho {fact.fact_id} cita {support.evidence_id}, que no es evidencia utilizable y relevante."
-                )
+                errors.append(f"El hecho {fact.fact_id} cita {support.evidence_id}, que no es evidencia utilizable y relevante.")
                 continue
             if not _norm_contains(entry.excerpt, support.quote):
-                errors.append(
-                    f"La cita textual del hecho {fact.fact_id} no aparece en {support.evidence_id}."
-                )
+                errors.append(f"La cita textual del hecho {fact.fact_id} no aparece en {support.evidence_id}.")
                 continue
             overlap = _claim_overlap(fact.claim + " " + fact.value, support.quote)
             if overlap < 0.16 and fact.value and not _norm_contains(support.quote, fact.value):
-                errors.append(
-                    f"El pasaje {support.evidence_id} no respalda de forma concreta el hecho {fact.fact_id}."
-                )
+                errors.append(f"El pasaje {support.evidence_id} no respalda de forma concreta el hecho {fact.fact_id}.")
                 continue
             if support.relation == "contradicts":
                 contradicted = True
@@ -270,7 +215,7 @@ def validate_proposal(
             fact.confidence = 0.0
             fact.technical_confidence = 0.0
             fact.legal_confidence = 0.0
-            detected_conflicts.append(f"{fact.fact_id}: existe una evidencia marcada como contradictoria.")
+            detected_conflicts.append(f"{fact.subject}: existe una evidencia marcada como contradictoria.")
         elif not valid_supports:
             fact.support_status = "unsupported"
             fact.confidence = 0.0
@@ -288,8 +233,7 @@ def validate_proposal(
                 risk = _max_risk(risk, "high")
                 official = [entry for entry in valid_supports if entry.authority >= 85]
                 primary_official = [
-                    entry
-                    for entry in official
+                    entry for entry in official
                     if entry.authority >= 95 or entry.source_type == "official_gazette"
                 ]
                 if len(urls) < 2 or len(official) < 2 or not primary_official:
@@ -309,24 +253,32 @@ def validate_proposal(
             fact.confidence = round(min(technical, legal), 2)
 
         value = normalize_text(fact.value)
-        if value:
-            values_by_type.setdefault(fact.fact_type, set()).add(value)
+        subject = normalize_text(fact.subject)
+        if value and subject:
+            key = (fact.fact_type, subject)
+            values_by_subject.setdefault(key, set()).add(value)
+            evidence_by_subject.setdefault(key, set()).update(fact.evidence_ids)
 
-    for fact_type, values in values_by_type.items():
+    for (fact_type, subject), values in values_by_subject.items():
         if fact_type in CRITICAL_FACTS and len(values) > 1:
             detected_conflicts.append(
-                f"Valores incompatibles detectados para {fact_type}: " + " | ".join(sorted(values)[:6])
+                f"Valores incompatibles para {subject}: " + " | ".join(sorted(values)[:6])
             )
+            ids = sorted(evidence_by_subject.get((fact_type, subject), set()))
+            if len(ids) >= 2:
+                proposal.conflicts.append(Conflict(
+                    topic=subject,
+                    statements=[
+                        f"Se han detectado valores incompatibles: {' | '.join(sorted(values)[:6])}",
+                        "La propuesta no puede elegir una versión sin resolver la discrepancia.",
+                    ],
+                    evidence_ids=ids[:12],
+                    recommended_resolution="Revisar las fuentes primarias y repetir la investigación.",
+                ))
 
-    for message in detected_conflicts:
-        proposal.conflicts.append(
-            Conflict(
-                topic="Conflicto detectado automáticamente",
-                statements=[message, "La propuesta no puede elegir una versión sin revisión."],
-                evidence_ids=list(usable)[:2] or ["E000", "E001"],
-                recommended_resolution="Revisar las fuentes primarias y repetir la investigación.",
-            )
-        )
+    if detected_conflicts and not proposal.conflicts:
+        warnings.append("Se detectó una posible contradicción, pero no hay dos evidencias distintas para formalizarla.")
+        errors.extend(detected_conflicts)
 
     if proposal.change_required:
         content = semantic_audit(current_content, proposal.proposed_content, proposal.changes)
@@ -342,19 +294,16 @@ def validate_proposal(
         }
     errors.extend(content["errors"])
     warnings.extend(content["warnings"])
-    checks.append(
-        QualityCheck(
-            check_id="content_retention",
-            label="Conservación del contenido",
-            status="blocked" if content["errors"] else "pass",
-            detail=f"Retención textual: {content['retention_ratio']:.0%}.",
-        )
-    )
+    checks.append(QualityCheck(
+        check_id="content_retention",
+        label="Conservación del contenido",
+        status="blocked" if content["errors"] else "pass",
+        detail=f"Retención textual: {content['retention_ratio']:.0%}.",
+    ))
 
     if proposal.index_patch.model_dump(exclude_none=True):
         index_changes = [
-            change
-            for change in proposal.changes
+            change for change in proposal.changes
             if "indice" in normalize_text(change.section) or "índice" in change.section.lower()
         ]
         if not index_changes or not all(change.evidence_ids for change in index_changes):
@@ -371,11 +320,7 @@ def validate_proposal(
     else:
         status = "verified"
 
-    if (
-        proposal.change_required
-        and not proposal.proposed_content.strip()
-        and not proposal.index_patch.model_dump(exclude_none=True)
-    ):
+    if proposal.change_required and not proposal.proposed_content.strip() and not proposal.index_patch.model_dump(exclude_none=True):
         errors.append("Se declaró un cambio, pero no se proporcionó contenido ni parche del índice.")
         status = "insufficient_evidence"
 
@@ -396,10 +341,4 @@ def validate_proposal(
         primary_sources=[str(entry.url) for entry in primary],
         required_source_failures=[str(entry.url) for entry in required_failures],
     )
-    return ValidationReport(
-        status=status,
-        risk=risk,
-        warnings=warnings,
-        errors=errors,
-        quality=quality,
-    )
+    return ValidationReport(status=status, risk=risk, warnings=warnings, errors=errors, quality=quality)
