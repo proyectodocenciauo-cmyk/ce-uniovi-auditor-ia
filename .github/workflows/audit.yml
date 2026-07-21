@@ -1,39 +1,41 @@
-name: CE-IA · Conexión y piloto gratuito
+name: CE-IA · Procesamiento automático
 
 on:
   workflow_dispatch:
     inputs:
-      modo:
-        description: Acción que se ejecutará
-        required: true
-        default: comprobar_conexion
-        type: choice
-        options:
-          - comprobar_conexion
-          - piloto_un_tramite
+      source:
+        description: Origen de la ejecución
+        required: false
+        default: wordpress
+        type: string
+  schedule:
+    - cron: "17 * * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ceia-piloto-manual
+  group: ceia-procesamiento
   cancel-in-progress: false
 
 jobs:
-  ceia:
-    name: CE-IA · ${{ inputs.modo }}
+  procesar:
+    name: Procesar cola CE-IA
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       CEIA_WP_URL: ${{ secrets.CEIA_WP_URL }}
       CEIA_WP_USER: ${{ secrets.CEIA_WP_USER }}
       CEIA_WP_APP_PASSWORD: ${{ secrets.CEIA_WP_APP_PASSWORD }}
-      CEIA_WORKER_ID: github-actions-manual
+      CEIA_WORKER_ID: github-actions-auto
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PYTHONUNBUFFERED: "1"
     steps:
-      - name: Descargar código
+      - name: Descargar el código actual
         uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
 
       - name: Preparar Python
         uses: actions/setup-python@v6
@@ -42,12 +44,11 @@ jobs:
           cache: pip
           cache-dependency-path: worker/pyproject.toml
 
-      - name: Instalar trabajador
-        run: python -m pip install ./worker
+      - name: Instalar el trabajador actual
+        run: python -m pip install --no-cache-dir --force-reinstall ./worker
 
-      - name: Comprobar conexión privada con WordPress
+      - name: Comprobar WordPress
         run: ceia-worker status
 
-      - name: Ejecutar piloto de un único trámite
-        if: ${{ inputs.modo == 'piloto_un_tramite' }}
-        run: ceia-worker run --max-jobs 1
+      - name: Procesar la cola según el límite de WordPress
+        run: ceia-worker run --success-if-completed
