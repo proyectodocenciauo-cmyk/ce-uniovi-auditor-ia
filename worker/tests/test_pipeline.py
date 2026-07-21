@@ -7,8 +7,7 @@ from unittest.mock import patch
 from ceia_worker.models import EvidenceRecord, ModelProposal, RemoteConfig
 from ceia_worker.pipeline import Worker
 
-
-SAFE_HTML = """<section id="ceia-pilot"><style>#ceia-pilot{color:#172033}#ceia-pilot *{box-sizing:border-box}@media(max-width:640px){#ceia-pilot{padding:12px}}</style><h2>Guía</h2><p>Contenido contrastado.</p></section>"""
+SAFE_HTML = """<section id="ceia-pilot"><style>#ceia-pilot{color:#172033;max-width:100%}#ceia-pilot *{box-sizing:border-box}@media(max-width:640px){#ceia-pilot{padding:12px}}</style><h2>Guía</h2><p>El plazo termina el 31 de marzo.</p><p>Contenido contrastado.</p></section>"""
 
 
 class FakeWordPress:
@@ -16,8 +15,19 @@ class FakeWordPress:
         self.contexts = [
             {
                 "job": {"id": "11111111-1111-4111-8111-111111111111"},
-                "item": {"id": 1, "title": "Trámite piloto", "category": "Ayudas y Becas", "risk": "high"},
-                "post": {"id": 20, "title": "Trámite piloto", "url": "https://www.unioviedo.es/cestudiantes/piloto/", "content": "<p>Anterior</p>"},
+                "item": {
+                    "id": 1,
+                    "title": "Trámite piloto",
+                    "category": "Ayudas y Becas",
+                    "risk": "high",
+                    "url": "https://www.unioviedo.es/cestudiantes/piloto/",
+                },
+                "post": {
+                    "id": 20,
+                    "title": "Trámite piloto",
+                    "url": "https://www.unioviedo.es/cestudiantes/piloto/",
+                    "content": SAFE_HTML,
+                },
                 "tramite": {"id": 1, "nombre": "Trámite piloto"},
                 "sources": [],
             }
@@ -28,9 +38,9 @@ class FakeWordPress:
     def config(self):
         return RemoteConfig(
             site_url="https://www.unioviedo.es/cestudiantes/",
-            plugin_version="0.9.0",
+            plugin_version="0.12.0",
             gemini_api_key="fake",
-            allowed_source_hosts=["uniovi.es", "unioviedo.es", "boe.es"],
+            allowed_source_hosts=["uniovi.es", "unioviedo.es", "boe.es", "asturias.es"],
         )
 
     def heartbeat(self, version, provider, message="ready"):
@@ -60,25 +70,28 @@ class FakeProvider:
             change_required=True,
             validation_status="verified",
             risk="high",
-            summary="Se actualiza con dos fuentes oficiales.",
+            summary="Se mantiene el contenido con dos fuentes oficiales.",
             proposed_content=SAFE_HTML,
-            changes=[
-                {
-                    "section": "Plazo",
-                    "current": "Anterior",
-                    "proposed": "Nuevo",
-                    "reason": "Resolución oficial",
-                    "evidence_ids": ["E001", "E002"],
-                }
-            ],
             facts=[
                 {
                     "fact_id": "F1",
                     "fact_type": "deadline",
+                    "subject": "plazo de presentación",
                     "claim": "El plazo termina el 31 de marzo.",
-                    "value": "2026-03-31",
+                    "value": "31 de marzo",
                     "evidence_ids": ["E001", "E002"],
-                    "confidence": 0.98,
+                    "supports": [
+                        {
+                            "evidence_id": "E001",
+                            "quote": "El plazo termina el 31 de marzo.",
+                            "relation": "supports",
+                        },
+                        {
+                            "evidence_id": "E002",
+                            "quote": "El plazo termina el 31 de marzo.",
+                            "relation": "supports",
+                        },
+                    ],
                 }
             ],
             citations=["E001", "E002"],
@@ -91,17 +104,56 @@ class FakeRetriever:
 
     def collect(self, context):
         now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+        common = {
+            "retrieved_gmt": now,
+            "http_status": 200,
+            "excerpt": "El plazo termina el 31 de marzo.",
+            "relevance_score": 95,
+            "required": True,
+            "primary": True,
+            "retrieval_status": "ok",
+        }
         return [
-            EvidenceRecord(local_id="E001", url="https://sede.uniovi.es/resolucion", title="Sede", authority=95, source_type="official_registry", retrieved_gmt=now, http_status=200, content_hash="a" * 64, excerpt="Plazo oficial."),
-            EvidenceRecord(local_id="E002", url="https://www.boe.es/boe/dias/2026/03/01/pdfs/a.pdf", title="BOE", authority=100, source_type="official_gazette", retrieved_gmt=now, http_status=200, content_hash="b" * 64, excerpt="Publicación oficial."),
+            EvidenceRecord(
+                local_id="E001",
+                url="https://sede.uniovi.es/resolucion",
+                title="Sede",
+                authority=95,
+                source_type="official_registry",
+                content_hash="a" * 64,
+                **common,
+            ),
+            EvidenceRecord(
+                local_id="E002",
+                url="https://www.boe.es/boe/dias/2026/03/01/pdfs/a.pdf",
+                title="BOE",
+                authority=100,
+                source_type="official_gazette",
+                content_hash="b" * 64,
+                **common,
+            ),
         ], []
+
+    def audit_links(self, urls, current_urls, evidence_urls):
+        return [], [], []
 
 
 class PipelineTests(unittest.TestCase):
-    def test_pipeline_delivers_evidence_but_no_publish_instruction(self):
+    def test_pipeline_delivers_quality_report_and_never_publishes(self):
         wordpress = FakeWordPress()
         provider = FakeProvider()
-        with patch("ceia_worker.pipeline.Retriever", FakeRetriever):
+        previews = [
+            {"width": width, "mime": "image/jpeg", "data": "ZmFrZQ=="}
+            for width in (360, 390, 768, 1440)
+        ]
+        responsive = [
+            {"width": width, "status": "pass", "issues": []}
+            for width in (360, 390, 768, 1440)
+        ]
+        with patch("ceia_worker.pipeline.EvidenceRetriever", FakeRetriever), patch(
+            "ceia_worker.pipeline.render_responsive",
+            return_value=(previews, responsive, []),
+        ):
             stats = Worker(wordpress, provider=provider).run(max_jobs=1)
 
         self.assertEqual({"claimed": 1, "completed": 1, "failed": 0}, stats)
@@ -109,11 +161,12 @@ class PipelineTests(unittest.TestCase):
         job_id, payload = wordpress.results[0]
         self.assertEqual("11111111-1111-4111-8111-111111111111", job_id)
         self.assertEqual("verified", payload["validation_status"])
+        self.assertEqual("pass", payload["publication_gate"])
         self.assertEqual(2, len(payload["evidence"]))
+        self.assertEqual(4, len(payload["previews"]))
         self.assertNotIn("publish", payload)
         self.assertIn("Trámite piloto", provider.prompts[0])
 
 
 if __name__ == "__main__":
     unittest.main()
-
