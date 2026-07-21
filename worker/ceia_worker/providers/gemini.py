@@ -31,11 +31,18 @@ Devuelve exclusivamente un objeto JSON completo, sin Markdown ni comentarios, co
     "fechas_adicionales": [{"fecha_inicio": "YYYY-MM-DD", "fecha_fin": "YYYY-MM-DD"}] | null
   },
   "changes": [{"section": string, "current": string, "proposed": string, "reason": string, "evidence_ids": [string]}],
-  "facts": [{"fact_id": string, "fact_type": "deadline" | "amount" | "eligibility" | "legal_basis" | "procedure" | "competent_body" | "contact" | "definition" | "other", "claim": string, "value": string, "evidence_ids": [string], "confidence": number}],
+  "facts": [{
+    "fact_id": string,
+    "fact_type": "deadline" | "amount" | "eligibility" | "legal_basis" | "procedure" | "competent_body" | "contact" | "definition" | "other",
+    "claim": string,
+    "value": string,
+    "evidence_ids": [string],
+    "supports": [{"evidence_id": string, "quote": string, "relation": "supports" | "contradicts" | "context_only"}]
+  }],
   "conflicts": [{"topic": string, "statements": [string, string], "evidence_ids": [string, string], "recommended_resolution": string}],
   "citations": [string]
 }
-Usa cadenas vacías, listas vacías y un objeto index_patch vacío cuando no proceda completar esos campos. No añadas ninguna clave distinta.
+Las citas de supports deben ser pasajes literales contenidos en los extractos del expediente. No incluyas campos de confianza: se calculan de forma determinista. Usa cadenas y listas vacías cuando no proceda y no añadas claves distintas.
 """.strip()
 
     def __init__(self, api_key: str, model: str):
@@ -53,15 +60,12 @@ Usa cadenas vacías, listas vacías y un objeto index_patch vacío cuando no pro
     def _endpoint(self) -> str:
         model = urllib.parse.quote(self.model.strip(), safe="-._")
         key = urllib.parse.quote(self.api_key, safe="")
-        return (
-            "https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{model}:generateContent?key={key}"
-        )
+        return f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
 
     @staticmethod
     def _extract_text(data: dict[str, Any]) -> str:
         chunks: list[str] = []
-        candidates = data.get("candidates")
+        candidates = data.get("candidates") if isinstance(data, dict) else None
         if isinstance(candidates, list):
             for candidate in candidates[:1]:
                 if not isinstance(candidate, dict):
@@ -79,15 +83,8 @@ Usa cadenas vacías, listas vacías y un objeto index_patch vacío cuando no pro
 
     def _generate(self, prompt: str) -> str:
         payload = {
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [{"text": prompt}],
-                }
-            ],
-            "generationConfig": {
-                "responseMimeType": "application/json",
-            },
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"responseMimeType": "application/json"},
         }
         try:
             status, data = json_request(
@@ -114,14 +111,7 @@ Usa cadenas vacías, listas vacías y un objeto index_patch vacío cuando no pro
 
         output = self._extract_text(data)
         if not output:
-            finish_reason = ""
-            candidates = data.get("candidates") if isinstance(data, dict) else None
-            if isinstance(candidates, list) and candidates and isinstance(candidates[0], dict):
-                finish_reason = str(candidates[0].get("finishReason", ""))
-            raise ProviderError(
-                "Gemini devolvió una respuesta vacía"
-                + (f" ({self._safe_message(finish_reason)})" if finish_reason else "")
-            )
+            raise ProviderError("Gemini devolvió una respuesta vacía")
         return output
 
     def analyze(self, prompt: str) -> ModelProposal:
@@ -131,10 +121,9 @@ Usa cadenas vacías, listas vacías y un objeto index_patch vacío cuando no pro
         for attempt in range(2):
             current_prompt = base_prompt
             if attempt and last_error is not None:
-                details = self._safe_message(last_error)
                 current_prompt += (
-                    "\n\nLa respuesta anterior no cumplió el contrato. Corrígela y devuelve "
-                    f"el objeto JSON completo. Error de validación: {details}"
+                    "\n\nLa respuesta anterior no cumplió el contrato. Devuelve el JSON completo corregido. Error: "
+                    + self._safe_message(last_error)
                 )
             output = self._generate(current_prompt)
             try:
@@ -146,6 +135,5 @@ Usa cadenas vacías, listas vacías y un objeto index_patch vacío cuando no pro
                     continue
 
         raise ProviderError(
-            "La respuesta JSON de Gemini no cumple el contrato: "
-            + self._safe_message(last_error)
+            "La respuesta JSON de Gemini no cumple el contrato: " + self._safe_message(last_error)
         ) from last_error
