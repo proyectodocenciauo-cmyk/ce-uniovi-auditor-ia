@@ -59,6 +59,7 @@ class Fact(BaseModel):
         "definition",
         "other",
     ]
+    subject: str = Field(min_length=3, max_length=300)
     claim: str = Field(min_length=1, max_length=4000)
     value: str = Field(default="", max_length=2000)
     evidence_ids: list[str] = Field(default_factory=list, max_length=12)
