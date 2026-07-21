@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ceia-worker"
-version = "0.10.6"
-description = "Trabajador gratuito de investigación para CE-IA Auditor de Trámites"
+version = "0.12.0"
+description = "Trabajador gratuito de investigación segura para CE-IA Auditor de Trámites"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "GPL-2.0-or-later"}
@@ -13,6 +13,7 @@ authors = [{name = "Consejo de Estudiantes de la Universidad de Oviedo"}]
 dependencies = [
   "pydantic==2.13.4",
   "pypdf==6.14.2",
+  "playwright==1.61.0",
 ]
 
 [project.optional-dependencies]
