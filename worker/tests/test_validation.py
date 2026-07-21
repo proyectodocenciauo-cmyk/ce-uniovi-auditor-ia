@@ -92,18 +92,13 @@ class DeterministicSafetyTests(unittest.TestCase):
         fact = Fact(
             fact_id="F001",
             fact_type="deadline",
+            subject="plazo de presentación",
             claim="El plazo termina el 31 de marzo.",
             value="31 de marzo",
             evidence_ids=["E001", "E002"],
             supports=[
-                EvidenceSupport(
-                    evidence_id="E001",
-                    quote="El plazo termina el 31 de marzo.",
-                ),
-                EvidenceSupport(
-                    evidence_id="E002",
-                    quote="El plazo termina el 31 de marzo.",
-                ),
+                EvidenceSupport(evidence_id="E001", quote="El plazo termina el 31 de marzo."),
+                EvidenceSupport(evidence_id="E002", quote="El plazo termina el 31 de marzo."),
             ],
         )
         proposal = ModelProposal(
@@ -118,17 +113,8 @@ class DeterministicSafetyTests(unittest.TestCase):
         report = validate_proposal(
             proposal,
             [
-                evidence(
-                    "E001",
-                    "https://sede.uniovi.es/a",
-                    "El plazo termina el 31 de marzo.",
-                ),
-                evidence(
-                    "E002",
-                    "https://www.boe.es/a",
-                    "El plazo termina el 31 de marzo.",
-                    100,
-                ),
+                evidence("E001", "https://sede.uniovi.es/a", "El plazo termina el 31 de marzo."),
+                evidence("E002", "https://www.boe.es/a", "El plazo termina el 31 de marzo.", 100),
             ],
             "high",
             CURRENT_HTML,
@@ -137,26 +123,21 @@ class DeterministicSafetyTests(unittest.TestCase):
         self.assertLess(proposal.facts[0].confidence, 1)
         self.assertEqual("supported", proposal.facts[0].support_status)
 
-    def test_detects_conflicting_critical_values_even_if_model_does_not(self):
+    def test_detects_conflicting_values_for_same_subject(self):
         facts = []
-        rows = [
+        for fact_id, value, evidence_id in (
             ("F001", "31 marzo", "E001"),
             ("F002", "15 abril", "E002"),
-        ]
-        for fact_id, value, evidence_id in rows:
+        ):
             facts.append(
                 Fact(
                     fact_id=fact_id,
                     fact_type="deadline",
+                    subject="plazo de presentación",
                     claim=f"El plazo es {value}",
                     value=value,
                     evidence_ids=[evidence_id],
-                    supports=[
-                        EvidenceSupport(
-                            evidence_id=evidence_id,
-                            quote=f"El plazo es {value}",
-                        )
-                    ],
+                    supports=[EvidenceSupport(evidence_id=evidence_id, quote=f"El plazo es {value}")],
                 )
             )
         proposal = ModelProposal(
@@ -179,6 +160,53 @@ class DeterministicSafetyTests(unittest.TestCase):
         self.assertEqual("conflict", report.status)
         self.assertEqual("blocked", report.quality.gate)
         self.assertTrue(proposal.conflicts)
+
+    def test_different_deadline_subjects_are_not_a_conflict(self):
+        facts = [
+            Fact(
+                fact_id="F001",
+                fact_type="deadline",
+                subject="plazo de presentación",
+                claim="La solicitud termina el 31 de marzo",
+                value="31 marzo",
+                evidence_ids=["E001", "E002"],
+                supports=[
+                    EvidenceSupport(evidence_id="E001", quote="La solicitud termina el 31 de marzo"),
+                    EvidenceSupport(evidence_id="E002", quote="La solicitud termina el 31 de marzo"),
+                ],
+            ),
+            Fact(
+                fact_id="F002",
+                fact_type="deadline",
+                subject="plazo de recurso",
+                claim="El recurso termina el 15 de abril",
+                value="15 abril",
+                evidence_ids=["E001", "E002"],
+                supports=[
+                    EvidenceSupport(evidence_id="E001", quote="El recurso termina el 15 de abril"),
+                    EvidenceSupport(evidence_id="E002", quote="El recurso termina el 15 de abril"),
+                ],
+            ),
+        ]
+        proposal = ModelProposal(
+            change_required=True,
+            validation_status="verified",
+            risk="high",
+            summary="Plazos distintos para actuaciones distintas.",
+            proposed_content=SAFE_HTML,
+            facts=facts,
+        )
+        text = "La solicitud termina el 31 de marzo. El recurso termina el 15 de abril."
+        report = validate_proposal(
+            proposal,
+            [
+                evidence("E001", "https://sede.uniovi.es/a", text),
+                evidence("E002", "https://www.boe.es/a", text, 100),
+            ],
+            "high",
+            CURRENT_HTML,
+        )
+        self.assertNotEqual("conflict", report.status)
 
 
 if __name__ == "__main__":
