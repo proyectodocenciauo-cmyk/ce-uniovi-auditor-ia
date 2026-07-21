@@ -5,7 +5,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
-
 Risk = Literal["low", "medium", "high", "critical"]
 ValidationStatus = Literal[
     "verified",
@@ -14,6 +13,10 @@ ValidationStatus = Literal[
     "conflict",
     "insufficient_evidence",
 ]
+SupportRelation = Literal["supports", "contradicts", "context_only"]
+SupportStatus = Literal["supported", "partially_supported", "unsupported", "conflict"]
+RetrievalStatus = Literal["ok", "http_error", "network_error", "irrelevant", "unsupported"]
+PublicationGate = Literal["pass", "blocked", "not_applicable"]
 
 
 class DateRange(BaseModel):
@@ -37,6 +40,12 @@ class IndexPatch(BaseModel):
     fechas_adicionales: list[DateRange] | None = None
 
 
+class EvidenceSupport(BaseModel):
+    evidence_id: str = Field(min_length=1, max_length=20)
+    quote: str = Field(min_length=1, max_length=2500)
+    relation: SupportRelation = "supports"
+
+
 class Fact(BaseModel):
     fact_id: str = Field(min_length=1, max_length=80)
     fact_type: Literal[
@@ -53,7 +62,11 @@ class Fact(BaseModel):
     claim: str = Field(min_length=1, max_length=4000)
     value: str = Field(default="", max_length=2000)
     evidence_ids: list[str] = Field(default_factory=list, max_length=12)
-    confidence: float = Field(ge=0, le=1)
+    supports: list[EvidenceSupport] = Field(default_factory=list, max_length=12)
+    confidence: float = Field(default=0.0, ge=0, le=1)
+    technical_confidence: float = Field(default=0.0, ge=0, le=1)
+    legal_confidence: float = Field(default=0.0, ge=0, le=1)
+    support_status: SupportStatus = "unsupported"
 
 
 class Change(BaseModel):
@@ -109,9 +122,38 @@ class EvidenceRecord(BaseModel):
     text: str = Field(default="", exclude=True)
     links: list[str] = Field(default_factory=list, exclude=True)
     facts: list[dict[str, Any]] = Field(default_factory=list)
+    relevance_score: int = Field(default=0, ge=0, le=100)
+    required: bool = False
+    primary: bool = False
+    retrieval_status: RetrievalStatus = "ok"
+    retrieval_error: str = Field(default="", max_length=1000)
+    origin: str = Field(default="", max_length=80)
+    content_type: str = Field(default="", max_length=120)
 
     def for_wordpress(self) -> dict[str, Any]:
         return self.model_dump(mode="json", exclude={"text", "links"})
+
+
+class QualityCheck(BaseModel):
+    check_id: str = Field(min_length=1, max_length=80)
+    label: str = Field(min_length=1, max_length=300)
+    status: Literal["pass", "warning", "blocked"]
+    detail: str = Field(default="", max_length=5000)
+
+
+class QualityReport(BaseModel):
+    gate: PublicationGate = "blocked"
+    checks: list[QualityCheck] = Field(default_factory=list, max_length=100)
+    retention_ratio: float = Field(default=1.0, ge=0, le=1)
+    removed_blocks: list[str] = Field(default_factory=list, max_length=30)
+    added_blocks: list[str] = Field(default_factory=list, max_length=30)
+    removed_links: list[str] = Field(default_factory=list, max_length=50)
+    added_links: list[str] = Field(default_factory=list, max_length=50)
+    link_results: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+    responsive_results: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
+    detected_conflicts: list[str] = Field(default_factory=list, max_length=50)
+    primary_sources: list[str] = Field(default_factory=list, max_length=30)
+    required_source_failures: list[str] = Field(default_factory=list, max_length=30)
 
 
 class RemoteLimits(BaseModel):
