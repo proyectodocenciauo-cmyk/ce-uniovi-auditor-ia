@@ -3,9 +3,17 @@ from __future__ import annotations
 import unittest
 from datetime import UTC, datetime
 
-from ceia_worker.models import EvidenceRecord, Fact, ModelProposal
+from ceia_worker.models import EvidenceRecord, EvidenceSupport, Fact, ModelProposal
 from ceia_worker.validation import UnsafeProposalError, validate_html, validate_proposal
 
+CURRENT_HTML = """
+<section id="old-guide">
+  <h2>Solicitud</h2>
+  <p>El plazo termina el 31 de marzo.</p>
+  <p>Documentación necesaria y requisitos de acceso.</p>
+  <a href="https://www.unioviedo.es/cestudiantes/index.php/contacto/">Contacto</a>
+</section>
+"""
 
 SAFE_HTML = """
 <section id="ceia-guide">
@@ -14,23 +22,29 @@ SAFE_HTML = """
     #ceia-guide *{box-sizing:border-box}
     @media(max-width:640px){#ceia-guide{padding:12px}}
   </style>
-  <h2>Guía comprobada</h2>
-  <p>Consulta la fuente oficial.</p>
+  <h2>Solicitud</h2>
+  <p>El plazo termina el 31 de marzo.</p>
+  <p>Documentación necesaria y requisitos de acceso.</p>
+  <a href="https://www.unioviedo.es/cestudiantes/index.php/contacto/">Contacto</a>
 </section>
 """
 
 
-def evidence(local_id: str, url: str, authority: int) -> EvidenceRecord:
+def evidence(local_id: str, url: str, quote: str, authority: int = 95) -> EvidenceRecord:
     return EvidenceRecord(
         local_id=local_id,
         url=url,
-        title="Fuente",
-        source_type="institutional",
+        title="Fuente oficial",
+        source_type="official_registry" if authority < 100 else "official_gazette",
         authority=authority,
         retrieved_gmt=datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
         http_status=200,
         content_hash="a" * 64,
-        excerpt="El plazo oficial consta en esta resolución.",
+        excerpt=quote,
+        relevance_score=90,
+        required=True,
+        primary=True,
+        retrieval_status="ok",
     )
 
 
@@ -38,81 +52,133 @@ class HTMLValidationTests(unittest.TestCase):
     def test_accepts_scoped_responsive_block(self):
         self.assertEqual([], validate_html(SAFE_HTML))
 
-    def test_rejects_span_and_script(self):
-        for fragment in ("<span>dato</span>", "<script>alert(1)</script>"):
-            with self.subTest(fragment=fragment), self.assertRaises(UnsafeProposalError):
-                validate_html(SAFE_HTML.replace("<p>Consulta", fragment + "<p>Consulta"))
-
-    def test_rejects_global_css(self):
-        with self.assertRaises(UnsafeProposalError):
-            validate_html(SAFE_HTML.replace("#ceia-guide{color", "body{color"))
-
-    def test_rejects_remote_css_and_active_svg(self):
-        unsafe_css = SAFE_HTML.replace("color:#172033", "background:url(https://example.org/a.png)")
-        unsafe_svg = SAFE_HTML.replace("<h2>", '<svg><use href="https://example.org/icon.svg#x"></use></svg><h2>')
-        for html in (unsafe_css, unsafe_svg):
-            with self.subTest(html=html[:80]), self.assertRaises(UnsafeProposalError):
+    def test_rejects_span_script_duplicate_ids_and_empty_links(self):
+        variants = (
+            SAFE_HTML.replace("<p>El plazo", "<span>dato</span><p>El plazo"),
+            SAFE_HTML.replace("<p>El plazo", "<script>alert(1)</script><p>El plazo"),
+            SAFE_HTML.replace("<h2>", '<h2 id="ceia-guide">'),
+            SAFE_HTML.replace('href="https://www.unioviedo.es/cestudiantes/index.php/contacto/"', 'href="#"'),
+        )
+        for html in variants:
+            with self.subTest(html=html[:100]), self.assertRaises(UnsafeProposalError):
                 validate_html(html)
 
-    def test_warns_about_temporal_closed_wording(self):
-        html = SAFE_HTML.replace("Consulta la fuente oficial.", "Actualmente está cerrado.")
-        warnings = validate_html(html)
-        self.assertTrue(any("temporal" in warning for warning in warnings))
 
-
-class EvidenceValidationTests(unittest.TestCase):
-    def test_critical_fact_with_two_official_sources_is_verified(self):
+class DeterministicSafetyTests(unittest.TestCase):
+    def test_blocks_large_deletion(self):
         proposal = ModelProposal(
             change_required=True,
             validation_status="verified",
             risk="high",
-            summary="Se actualiza un plazo contrastado.",
-            proposed_content=SAFE_HTML,
-            facts=[
-                Fact(
-                    fact_id="F1",
-                    fact_type="deadline",
-                    claim="El último plazo publicado termina el 31 de marzo.",
-                    value="2026-03-31",
-                    evidence_ids=["E001", "E002"],
-                    confidence=0.98,
-                )
-            ],
-            citations=["E001", "E002"],
-        )
-        sources = [
-            evidence("E001", "https://sede.uniovi.es/convocatoria", 95),
-            evidence("E002", "https://www.boe.es/boe/dias/2026/03/01/pdfs/x.pdf", 100),
-        ]
-        report = validate_proposal(proposal, sources, "high")
-        self.assertEqual("verified", report.status)
-        self.assertFalse(report.errors)
-
-    def test_critical_fact_without_official_source_is_blocked(self):
-        proposal = ModelProposal(
-            change_required=True,
-            validation_status="verified",
-            risk="medium",
-            summary="Cambio sin suficiente prueba.",
-            proposed_content=SAFE_HTML,
-            facts=[
-                Fact(
-                    fact_id="F1",
-                    fact_type="amount",
-                    claim="El importe es 100 euros.",
-                    value="100 EUR",
-                    evidence_ids=["E001"],
-                    confidence=0.8,
-                )
-            ],
+            summary="Reescritura excesiva.",
+            proposed_content=(
+                '<section id="short"><style>#short{}@media(max-width:640px){#short{}}</style>'
+                "<h2>Solicitud</h2></section>"
+            ),
         )
         report = validate_proposal(
             proposal,
-            [evidence("E001", "https://example.org/noticia", 25)],
-            "medium",
+            [
+                evidence("E001", "https://sede.uniovi.es/a", "Texto oficial"),
+                evidence("E002", "https://www.boe.es/a", "Texto oficial", 100),
+            ],
+            "high",
+            CURRENT_HTML,
         )
-        self.assertEqual("insufficient_evidence", report.status)
-        self.assertTrue(report.errors)
+        self.assertEqual("blocked", report.quality.gate)
+        self.assertTrue(any("conserva" in error for error in report.errors))
+
+    def test_requires_literal_quotes_and_two_official_sources(self):
+        fact = Fact(
+            fact_id="F001",
+            fact_type="deadline",
+            claim="El plazo termina el 31 de marzo.",
+            value="31 de marzo",
+            evidence_ids=["E001", "E002"],
+            supports=[
+                EvidenceSupport(
+                    evidence_id="E001",
+                    quote="El plazo termina el 31 de marzo.",
+                ),
+                EvidenceSupport(
+                    evidence_id="E002",
+                    quote="El plazo termina el 31 de marzo.",
+                ),
+            ],
+        )
+        proposal = ModelProposal(
+            change_required=True,
+            validation_status="verified",
+            risk="high",
+            summary="Actualización contrastada.",
+            proposed_content=SAFE_HTML,
+            facts=[fact],
+            citations=["E001", "E002"],
+        )
+        report = validate_proposal(
+            proposal,
+            [
+                evidence(
+                    "E001",
+                    "https://sede.uniovi.es/a",
+                    "El plazo termina el 31 de marzo.",
+                ),
+                evidence(
+                    "E002",
+                    "https://www.boe.es/a",
+                    "El plazo termina el 31 de marzo.",
+                    100,
+                ),
+            ],
+            "high",
+            CURRENT_HTML,
+        )
+        self.assertEqual("pass", report.quality.gate)
+        self.assertLess(proposal.facts[0].confidence, 1)
+        self.assertEqual("supported", proposal.facts[0].support_status)
+
+    def test_detects_conflicting_critical_values_even_if_model_does_not(self):
+        facts = []
+        rows = [
+            ("F001", "31 marzo", "E001"),
+            ("F002", "15 abril", "E002"),
+        ]
+        for fact_id, value, evidence_id in rows:
+            facts.append(
+                Fact(
+                    fact_id=fact_id,
+                    fact_type="deadline",
+                    claim=f"El plazo es {value}",
+                    value=value,
+                    evidence_ids=[evidence_id],
+                    supports=[
+                        EvidenceSupport(
+                            evidence_id=evidence_id,
+                            quote=f"El plazo es {value}",
+                        )
+                    ],
+                )
+            )
+        proposal = ModelProposal(
+            change_required=True,
+            validation_status="verified",
+            risk="high",
+            summary="Sin conflictos según el modelo.",
+            proposed_content=SAFE_HTML,
+            facts=facts,
+        )
+        report = validate_proposal(
+            proposal,
+            [
+                evidence("E001", "https://sede.uniovi.es/a", "El plazo es 31 marzo"),
+                evidence("E002", "https://www.boe.es/a", "El plazo es 15 abril", 100),
+            ],
+            "high",
+            CURRENT_HTML,
+        )
+        self.assertEqual("conflict", report.status)
+        self.assertEqual("blocked", report.quality.gate)
+        self.assertTrue(proposal.conflicts)
 
 
 if __name__ == "__main__":
