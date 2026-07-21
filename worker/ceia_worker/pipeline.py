@@ -17,6 +17,7 @@ from .wordpress import WordPressAPIError, WordPressClient
 LOGGER = logging.getLogger("ceia")
 MANAGED_HOST = "www.unioviedo.es"
 MANAGED_PATH_PREFIX = "/cestudiantes/"
+SAFE_EVALUATION_MAX_JOBS = 1
 
 
 def _is_managed_item_url(url: str) -> bool:
@@ -39,9 +40,10 @@ class Worker:
         )
 
     def run(self, max_jobs: int | None = None) -> dict[str, int]:
-        limit = self.config.limits.max_jobs_per_run
-        if max_jobs is not None:
-            limit = max(1, min(limit, max_jobs))
+        # La versión 0.12 permanece en evaluación controlada. Ni WordPress ni un
+        # workflow antiguo pueden ampliar este límite hasta que se retire de forma
+        # expresa después de superar el corpus de referencia.
+        limit = SAFE_EVALUATION_MAX_JOBS
         stats = {"claimed": 0, "completed": 0, "failed": 0}
         self.wordpress.heartbeat(__version__, self.provider.name, "ready")
 
