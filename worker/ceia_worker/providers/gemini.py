@@ -34,6 +34,7 @@ Devuelve exclusivamente un objeto JSON completo, sin Markdown ni comentarios, co
   "facts": [{
     "fact_id": string,
     "fact_type": "deadline" | "amount" | "eligibility" | "legal_basis" | "procedure" | "competent_body" | "contact" | "definition" | "other",
+    "subject": string,
     "claim": string,
     "value": string,
     "evidence_ids": [string],
@@ -42,7 +43,7 @@ Devuelve exclusivamente un objeto JSON completo, sin Markdown ni comentarios, co
   "conflicts": [{"topic": string, "statements": [string, string], "evidence_ids": [string, string], "recommended_resolution": string}],
   "citations": [string]
 }
-Las citas de supports deben ser pasajes literales contenidos en los extractos del expediente. No incluyas campos de confianza: se calculan de forma determinista. Usa cadenas y listas vacías cuando no proceda y no añadas claves distintas.
+subject identifica exactamente el asunto comparado, por ejemplo "plazo de presentación", "plazo de recurso" o "importe de la ayuda". Dos hechos solo son incompatibles si comparten fact_type y subject. Las citas de supports deben ser pasajes literales contenidos en los extractos del expediente. No incluyas campos de confianza: se calculan de forma determinista. Usa cadenas y listas vacías cuando no proceda y no añadas claves distintas.
 """.strip()
 
     def __init__(self, api_key: str, model: str):
