@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<title>Excursión matemática · Números de 3 cifras</title>
+<style>
+:root{
+  --bg:#f7fbff;--ink:#17324d;--muted:#5b7389;--card:#ffffff;--blue:#dff1ff;--green:#e7f7e8;--yellow:#fff4cf;--pink:#ffe7ec;--purple:#eee8ff;--ok:#2d9d5b;--bad:#d35454;--shadow:0 10px 28px rgba(23,50,77,.12);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:linear-gradient(#edf8ff,#f8fff7);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);min-height:100%}
+button{font:inherit}
+body{display:flex;justify-content:center}
+.app{width:min(100%,1100px);min-height:100vh;padding:clamp(12px,2vw,24px);display:flex;flex-direction:column;gap:14px}
+.topbar{display:flex;align-items:center;gap:10px;justify-content:space-between;background:rgba(255,255,255,.9);border-radius:22px;padding:10px 12px;box-shadow:var(--shadow);position:sticky;top:8px;z-index:20}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800}.brand .icon{font-size:32px}.brand small{display:block;color:var(--muted);font-weight:700}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.iconBtn{border:0;border-radius:16px;background:#eef6ff;color:#12385d;padding:12px 15px;font-size:22px;min-width:52px;min-height:52px;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+.progress{height:12px;background:#e7eef4;border-radius:999px;overflow:hidden}.progress>div{height:100%;background:linear-gradient(90deg,#60bdf0,#5dcf8d);width:0;transition:.35s}
+.screen{background:var(--card);border-radius:28px;padding:clamp(18px,3vw,34px);box-shadow:var(--shadow);min-height:650px;display:none;flex-direction:column;gap:20px}
+.screen.active{display:flex}
+.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:18px;align-items:center}
+.hero h1{font-size:clamp(32px,5vw,58px);line-height:1.02;margin:0}.hero p{font-size:clamp(18px,2.5vw,28px);color:var(--muted);margin:.6em 0 0}.bigEmoji{font-size:clamp(100px,18vw,190px);text-align:center}
+.listenRow{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.listen{border:0;background:#0e7bc4;color:white;border-radius:22px;padding:16px 22px;font-weight:900;font-size:clamp(20px,2.5vw,30px);min-height:64px}.listen.secondary{background:#edf6fc;color:#0e5e94}
+.prompt{font-size:clamp(24px,3.4vw,40px);font-weight:900;line-height:1.12;margin:0}.sub{font-size:clamp(17px,2.2vw,24px);color:var(--muted)}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.dest,.choice,.tile,.symbol,.reason{border:3px solid transparent;border-radius:24px;background:#f8fbff;min-height:150px;padding:14px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:8px;touch-action:manipulation;box-shadow:0 6px 14px rgba(23,50,77,.08)}
+.dest{font-size:clamp(18px,2vw,24px)}.dest .emoji{font-size:64px}.dest .num{font-size:clamp(30px,4vw,46px);font-weight:900}.dest .label{font-size:16px;color:var(--muted)}
+.choice{font-size:clamp(34px,5vw,62px);font-weight:900}.choice:active,.dest:active,.symbol:active,.reason:active{transform:scale(.98)}
+.selected{outline:6px solid #61b6ef;background:#eef8ff}.correct{outline:6px solid var(--ok);background:#ecfbf1}.wrong{outline:6px solid var(--bad);background:#fff0f0}
+.cdu{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:720px;margin:auto;width:100%}.slot{min-height:150px;border:4px dashed #9bb6cc;border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:60px;font-weight:900;background:#fbfdff}.slot b{font-size:26px;margin-bottom:8px}.slot.c b{color:#2b8f58}.slot.d b{color:#d55b5b}.slot.u b{color:#2686bd}
+.bank{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}.tile{width:120px;min-height:100px;font-size:50px;font-weight:900;cursor:grab;background:#fff8dd;border-color:#f5cf5b}.tile.dragging{opacity:.55}.slot.hover{background:#e9f8ff;border-color:#55a9df}
+.decomp{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.decompSlot{min-height:125px;border-radius:22px;border:4px dashed #a9bdcd;background:#fbfdff;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:900}.hund{background:#e9f7e8}.tens{background:#fff2df}.ones{background:#eaf4ff}
+.symbols{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}.symbol{width:130px;min-height:110px;font-size:64px;font-weight:1000;background:#fff}
+.compare{display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:center}.compare .dest{min-height:220px}.compareMark{font-size:70px;font-weight:1000;color:#7c8da0}
+.orderArea{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;align-items:center}.orderSlot{width:150px;min-height:120px;border:4px dashed #9bb6cc;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:900;background:#fff}.arrow{font-size:36px;color:#5e8bac}
+.feedback{min-height:74px;border-radius:20px;padding:15px 18px;display:flex;align-items:center;justify-content:center;font-size:clamp(22px,3vw,34px);font-weight:900;background:#f1f5f8;color:#567}.feedback.ok{background:#e7f8ed;color:#1f7b45}.feedback.bad{background:#fff0f0;color:#a74444}
+.nav{display:flex;justify-content:space-between;gap:12px;margin-top:auto}.nav button{border:0;border-radius:20px;padding:16px 24px;font-size:clamp(18px,2.4vw,28px);font-weight:900;min-height:62px}.prev{background:#eef3f6;color:#52687a}.next{background:#1f8ed1;color:#fff}.next[disabled]{opacity:.35}
+.teacherNote{font-size:14px;color:#6b7b88;background:#f5f7f9;border-radius:14px;padding:10px 12px}
+.numberPad{display:grid;grid-template-columns:repeat(3,82px);gap:10px;justify-content:center}.numberPad button{height:70px;border:0;border-radius:18px;background:#eef6ff;font-size:30px;font-weight:900}.answerBox{font-size:48px;font-weight:900;text-align:center;min-height:80px;padding:10px;border:3px solid #b7c9d7;border-radius:18px;background:#fff}
+.reason{font-size:20px;min-height:130px}.reason .emoji{font-size:52px}.done{font-size:clamp(40px,6vw,74px);text-align:center;font-weight:1000}.stars{font-size:56px;text-align:center}
+@media(max-width:800px){.hero{grid-template-columns:1fr}.grid4{grid-template-columns:repeat(2,1fr)}.grid3{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.compare{grid-template-columns:1fr}.compareMark{display:none}.screen{min-height:calc(100vh - 110px)}.dest{min-height:130px}.topbar .brand small{display:none}}
+@media(max-width:520px){.grid4{grid-template-columns:1fr 1fr}.app{padding:8px}.screen{border-radius:20px;padding:16px}.slot{min-height:120px}.tile{width:92px;min-height:84px}.actions .iconBtn{min-width:46px;padding:10px}.brand{font-size:14px}}
+</style>
+</head>
+<body>
+<div class="app" role="application" aria-label="Excursión matemática interactiva">
+  <div class="topbar">
+    <div class="brand"><span class="icon">🚌</span><div>Excursión matemática<small>Números de 3 cifras</small></div></div>
+    <div class="actions">
+      <button class="iconBtn" id="speakBtn" aria-label="Escuchar">🔊</button>
+      <button class="iconBtn" id="fullBtn" aria-label="Pantalla completa">⛶</button>
+      <button class="iconBtn" id="resetBtn" aria-label="Reiniciar">↻</button>
+    </div>
+  </div>
+  <div class="progress" aria-label="Progreso"><div id="bar"></div></div>
+
+  <section class="screen active" data-step="0" data-speech="Vamos a preparar una excursión. Hoy vamos a jugar con números de tres cifras. Toca el botón empezar.">
+    <div class="hero"><div><h1>🧭 Preparamos la excursión</h1><p>Escucha, toca y arrastra. Casi no tendrás que escribir.</p></div><div class="bigEmoji">🏔️🚌</div></div>
+    <div class="listenRow"><button class="listen" data-say="Vamos a preparar una excursión. Hoy vamos a jugar con números de tres cifras. Cuando estés preparado, toca empezar.">🔊 Escuchar</button></div>
+    <div class="grid4">
+      <div class="dest"><div class="emoji">⛰️</div><b>Covadonga</b><div class="num">350</div><div class="label">plazas</div></div>
+      <div class="dest"><div class="emoji">🌊</div><b>Cabo Peñas</b><div class="num">240</div><div class="label">plazas</div></div>
+      <div class="dest"><div class="emoji">🐠</div><b>Acuario</b><div class="num">420</div><div class="label">plazas</div></div>
+      <div class="dest"><div class="emoji">⛏️</div><b>Museo</b><div class="num">180</div><div class="label">plazas</div></div>
+    </div>
+    <div class="feedback">Pulsa 🔊 cuando quieras escuchar.</div>
+    <div class="nav"><span></span><button class="next" data-next>Empezar ▶</button></div>
+  </section>
+
+  <section class="screen" data-step="1" data-speech="Primera misión. Escucha y toca el número correcto. El Acuario de Gijón tiene cuatrocientas veinte plazas. Toca cuatrocientos veinte.">
+    <p class="prompt">1 · Escucha y toca 👆</p>
+    <div class="listenRow"><button class="listen" data-say="El Acuario de Gijón tiene cuatrocientas veinte plazas. Toca el número cuatrocientos veinte.">🔊 Escuchar</button></div>
+    <div class="grid3 choiceGroup" data-answer="420">
+      <button class="choice" data-value="240">240</button><button class="choice" data-value="420">420</button><button class="choice" data-value="402">402</button>
+    </div>
+    <div class="feedback">Toca una opción.</div>
+    <div class="nav"><button class="prev" data-prev>◀</button><button class="next" data-next disabled>Siguiente ▶</button></div>
+  </section>
+
+  <section class="screen" data-step="2" data-speech="Segunda misión. Vamos a colocar las cifras de trescientos cincuenta. Pon el tres en centenas, el cinco en decenas y el cero en unidades. Puedes arrastrar o tocar una cifra y después tocar una casilla.">
+    <p class="prompt">2 · Coloca 350 en C · D · U</p>
+    <div class="listenRow"><button class="listen" data-say="Coloca las cifras de trescientos cincuenta. Tres en centenas. Cinco en decenas. Cero en unidades.">🔊 Escuchar</button></div>
+    <div class="cdu dropActivity" data-answer="3,5,0">
+      <div class="slot c" data-slot="0"><b>C · centenas</b></div><div class="slot d" data-slot="1"><b>D · decenas</b></div><div class="slot u" data-slot="2"><b>U · unidades</b></div>
+    </div>
+    <div class="bank"><button class="tile" draggable="true" data-value="5">5</button><button class="tile" draggable="true" data-value="0">0</button><button class="tile" draggable="true" data-value="3">3</button></div>
+    <div class="feedback">Arrastra o toca.</div>
+    <div class="nav"><button class="prev" data-prev>◀</button><button class="next" data-next disabled>Siguiente ▶</button></div>
+  </section>
+
+  <section class="screen" data-step="3" data-speech="Tercera misión. Descompón cuatrocientos veinte. Coloca cuatrocientos, veinte y cero en su lugar.">
+    <p class="prompt">3 · Descompón 420</p>
+    <div class="listenRow"><button class="listen" data-say="Cuatrocientos veinte es cuatrocientos más veinte más cero. Coloca cada tarjeta en su lugar.">🔊 Escuchar</button></div>
+    <div class="decomp dropActivity" data-answer="400,20,0">
+      <div class="decompSlot hund" data-slot="0">💯 centenas</div><div class="decompSlot tens" data-slot="1">🔟 decenas</div><div class="decompSlot ones" data-slot="2">1️⃣ unidades</div>
+    </div>
+    <div class="bank"><button class="tile" draggable="true" data-value="20">20</button><button class="tile" draggable="true" data-value="0">0</button><button class="tile" draggable="true" data-value="400">400</button></div>
+    <div class="feedback">Pon cada tarjeta en su sitio.</div>
+    <div class="nav"><button class="prev" data-prev>◀</button><button class="next" data-next disabled>Siguiente ▶</button></div>
+  </section>
+
+  <section class="screen" data-step="4" data-speech="Cuarta misión. Escucha el número y elígelo. Ochocientos veinte.">
+    <p class="prompt">4 · ¿Qué número has oído? 👂</p>
+    <div class="listenRow"><button class="listen" data-say="Ochocientos veinte. Repito. Ochocientos veinte.">🔊 Escuchar número</button></div>
+    <div class="grid3 choiceGroup" data-answer="820">
+      <button class="choice" data-value="802">802</button><button class="choice" data-value="280">280</button><button class="choice" data-value="820">820</button>
+    </div>
+    <div class="feedback">Puedes escucharlo todas las veces que quieras.</div>
+    <div class="nav"><button class="prev" data-prev>◀</button><button class="next" data-next disabled>Siguiente ▶</button></div>
+  </section>
+
+  <section class="screen" data-step="5" data-speech="Quinta misión. Compara las plazas. Covadonga tiene trescientas cincuenta plazas. Cabo Peñas tiene doscientas cuarenta. Elige el signo correcto entre trescientos cincuenta y doscientos cuarenta.">
+    <p class="prompt">5 · Compara los destinos</p>
+    <div class="listenRow"><button class="listen" data-say="Covadonga tiene trescientas cincuenta plazas. Cabo Peñas tiene doscientas cuarenta. ¿Trescientos cincuenta es mayor, menor o igual que doscientos cuarenta?">🔊 Escuchar</button></div>
+    <div class="compare"><div class="dest"><div class="emoji">⛰️</div><b>Covadonga</b><div class="num">350</div></div><div class="compareMark">?</div><div class="dest"><div class="emoji">🌊</div><b>Cabo Peñas</b><div class="num">240</div></div></div>
+    <div class="symbols choiceGroup" data-answer=">"><button class="symbol" data-value="<">&lt;</button><button class="symbol" data-value=">">&gt;</button><button class="symbol" data-value="=">=</button></div>
+    <div class="feedback">Toca el signo.</div>
+    <div class="nav"><button class="prev" data-prev>◀</button><button class="next" data-next disabled>Siguiente ▶</button></div>
+  </section>
+
+  <section class="screen" data-step="6" data-speech="Sexta misión. Ordena los números de menor a mayor. Ciento ochenta, doscientos cuarenta, trescientos cincuenta y cuatrocientos veinte. Arrastra o toca las tarjetas para colocarlas de menor a mayor.">
+    <p class="prompt">6 · Ordena de menor a mayor</p>
+    <div class="listenRow"><button class="listen" data-say="Ordena de menor a mayor: ciento ochenta, doscientos cuarenta, trescientos cincuenta y cuatrocientos veinte.">🔊 Escuchar</button></div>
+    <div class="orderArea orderDrop" data-answer="180,240,350,420">
+      <div class="orderSlot" data-slot="0"></div><span class="arrow">→</span><div class="orderSlot" data-slot="1"></div><span class="arrow">→</span><div class="orderSlot" data-slot="2"></div><span class="arrow">→</span><div class="orderSlot" data-slot="3"></div>
+    </div>
+    <div class="bank"><button class="tile" draggable="true" data-value="350">350</button><button class="tile" draggable="true" data-value="180">180</button><button class="tile" draggable="true" data-value="420">420</button><button class="tile" draggable="true" data-value="240">240</button></div>
+    <div class="feedback">Empieza por el número más pequeño.</div>
+    <div class="nav"><button class="prev" data-prev>◀</button><button class="next" data-next disabled>Siguiente ▶</button></div>
+  </section>
+
+  <section class="screen" data-step="7" data-speech="Última misión. Queremos ir al destino que tiene más plazas. Toca el destino que tiene más plazas.">
+    <p class="prompt">7 · Elige con los datos</p>
+    <div class="listenRow"><button class="listen" data-say="Queremos elegir el destino con más plazas. Mira los números y toca el destino que tiene más plazas.">🔊 Escuchar</button></div>
+    <div class="grid4 choiceGroup" data-answer="420">
+      <button class="dest" data-value="350"><div class="emoji">⛰️</div><b>Covadonga</b><div class="num">350</div></button>
+      <button class="dest" data-value="240"><div class="emoji">🌊</div><b>Cabo Peñas</b><div class="num">240</div></button>
+      <button class="dest" data-value="420"><div class="emoji">🐠</div><b>Acuario</b><div class="num">420</div></button>
+      <button class="dest" data-value="180"><div class="emoji">⛏️</div><b>Museo</b><div class="num">180</div></button>
+    </div>
+    <p class="sub">Ahora elige por qué. Toca un dibujo para oírlo.</p>
+    <div class="grid3 reasons" style="display:none">
+      <button class="reason" data-reason="más plazas"><span class="emoji">👥</span><b>Más plazas</b></button>
+      <button class="reason" data-reason="más cerca"><span class="emoji">📍</span><b>Más cerca</b></button>
+      <button class="reason" data-reason="más barato"><span class="emoji">💶</span><b>Más barato</b></button>
+    </div>
+    <div class="feedback">Primero elige el destino.</div>
+    <div class="nav"><button class="prev" data-prev>◀</button><button class="next" data-next disabled>Terminar ⭐</button></div>
+  </section>
+
+  <section class="screen" data-step="8" data-speech="¡Muy bien! Has terminado la misión. Has trabajado números de tres cifras, centenas, decenas, unidades, comparación y ordenación.">
+    <div class="done">🎉 ¡Misión cumplida!</div><div class="stars">⭐ ⭐ ⭐</div>
+    <p class="prompt" style="text-align:center">Has preparado la excursión con matemáticas.</p>
+    <div class="listenRow" style="justify-content:center"><button class="listen" data-say="¡Muy bien! Has terminado. Has trabajado números de tres cifras, centenas, decenas, unidades, comparación y ordenación.">🔊 Escuchar</button></div>
+    <div class="nav"><button class="prev" data-prev>◀ Volver</button><button class="next" id="again">↻ Otra vez</button></div>
+  </section>
+
+  <div class="teacherNote">Para tablet: funciona mejor en Chrome o Edge. Las consignas se leen con la voz del propio dispositivo; no necesita cuenta, API ni conexión a Internet una vez abierto el archivo.</div>
+</div>
+<script>
+const screens=[...document.querySelectorAll('.screen')];let step=0;let selectedTile=null;
+const bar=document.getElementById('bar');
+function speak(t){speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='es-ES';u.rate=.84;u.pitch=1;const vs=speechSynthesis.getVoices();const es=vs.find(v=>/^es(-|_)/i.test(v.lang));if(es)u.voice=es;speechSynthesis.speak(u)}
+function show(n,auto=true){step=Math.max(0,Math.min(n,screens.length-1));screens.forEach((s,i)=>s.classList.toggle('active',i===step));bar.style.width=(step/(screens.length-1)*100)+'%';window.scrollTo({top:0,behavior:'smooth'});if(auto&&step>0)setTimeout(()=>speak(screens[step].dataset.speech||''),250)}
+function feedback(screen,msg,type,voice){const f=screen.querySelector('.feedback');if(!f)return;f.textContent=msg;f.className='feedback '+(type||'');if(voice)speak(voice)}
+function unlock(screen){const n=screen.querySelector('[data-next]');if(n)n.disabled=false}
+document.querySelectorAll('[data-next]').forEach(b=>b.addEventListener('click',()=>show(step+1)));
+document.querySelectorAll('[data-prev]').forEach(b=>b.addEventListener('click',()=>show(step-1,false)));
+document.querySelectorAll('[data-say]').forEach(b=>b.addEventListener('click',()=>speak(b.dataset.say)));
+document.getElementById('speakBtn').onclick=()=>speak(screens[step].dataset.speech||'');
+document.getElementById('fullBtn').onclick=()=>{if(!document.fullscreenElement)document.documentElement.requestFullscreen?.();else document.exitFullscreen?.()};
+document.getElementById('resetBtn').onclick=()=>{if(confirm('¿Reiniciar la actividad?'))location.reload()};
+document.getElementById('again').onclick=()=>location.reload();
+
+// Multiple choice
+for(const group of document.querySelectorAll('.choiceGroup')){
+  group.querySelectorAll('[data-value]').forEach(btn=>btn.addEventListener('click',()=>{
+    const screen=btn.closest('.screen');group.querySelectorAll('[data-value]').forEach(x=>x.classList.remove('selected','correct','wrong'));
+    btn.classList.add('selected');const ok=String(btn.dataset.value)===String(group.dataset.answer);
+    if(ok){btn.classList.add('correct');feedback(screen,'✅ ¡Muy bien!','ok','¡Muy bien!');unlock(screen);if(step===7){screen.querySelector('.reasons').style.display='grid';feedback(screen,'✅ Acuario: 420 plazas. Ahora toca una razón.','ok','Muy bien. El Acuario tiene cuatrocientas veinte plazas. Ahora toca una razón.')}}
+    else{btn.classList.add('wrong');feedback(screen,'↻ Inténtalo otra vez','bad','Inténtalo otra vez. Mira despacio los números.')}
+  }))
+}
+// Reasons on final
+for(const r of document.querySelectorAll('.reason'))r.addEventListener('click',()=>{document.querySelectorAll('.reason').forEach(x=>x.classList.remove('selected'));r.classList.add('selected');speak(r.dataset.reason);unlock(r.closest('.screen'))});
+
+// Drag/tap helper
+function setupDropActivity(activity,slotSelector){
+ const screen=activity.closest('.screen');const slots=[...activity.querySelectorAll(slotSelector)];const bank=screen.querySelector('.bank');
+ function place(tile,slot){if(slot.querySelector('.tile'))bank.appendChild(slot.querySelector('.tile'));slot.appendChild(tile);selectedTile=null;check()}
+ function check(){const vals=slots.map(s=>s.querySelector('.tile')?.dataset.value||'');if(vals.every(Boolean)){const ok=vals.join(',')===activity.dataset.answer;if(ok){feedback(screen,'✅ ¡Perfecto!','ok','¡Perfecto! Lo has colocado muy bien.');unlock(screen)}else feedback(screen,'↻ Revisa y prueba otra vez','bad','Casi. Revisa las posiciones y prueba otra vez.') }}
+ screen.querySelectorAll('.tile').forEach(tile=>{
+   tile.addEventListener('click',()=>{screen.querySelectorAll('.tile').forEach(x=>x.classList.remove('selected'));selectedTile=tile;tile.classList.add('selected')});
+   tile.addEventListener('dragstart',e=>{selectedTile=tile;tile.classList.add('dragging');e.dataTransfer.setData('text/plain',tile.dataset.value)});
+   tile.addEventListener('dragend',()=>tile.classList.remove('dragging'));
+ });
+ slots.forEach(slot=>{
+   slot.addEventListener('click',()=>{if(selectedTile&&selectedTile.closest('.screen')===screen)place(selectedTile,slot)});
+   slot.addEventListener('dragover',e=>{e.preventDefault();slot.classList.add('hover')});slot.addEventListener('dragleave',()=>slot.classList.remove('hover'));
+   slot.addEventListener('drop',e=>{e.preventDefault();slot.classList.remove('hover');if(selectedTile)place(selectedTile,slot)});
+ });
+ bank.addEventListener('click',e=>{if(e.target===bank&&selectedTile){bank.appendChild(selectedTile);selectedTile.classList.remove('selected');selectedTile=null}})
+}
+document.querySelectorAll('.dropActivity').forEach(a=>setupDropActivity(a,'[data-slot]'));
+document.querySelectorAll('.orderDrop').forEach(a=>setupDropActivity(a,'.orderSlot'));
+
+// Better touch drag: tap-to-place is always available and is the recommended tablet interaction.
+if('speechSynthesis' in window){speechSynthesis.onvoiceschanged=()=>{};}else{document.querySelectorAll('.listen,.iconBtn#speakBtn').forEach(b=>b.disabled=true)}
+show(0,false);
+</script>
+</body>
+</html>
